@@ -1,5 +1,14 @@
 # Checklist de deploy — Hostinger VPS + PM2
 
+> **Confirmar antes de tudo**: esse checklist assume acesso SSH root, PM2 e `crontab -e` livre
+> — ou seja, um plano **VPS**. "Hostinger Business" é o nome de um plano de hospedagem
+> **compartilhada** (o Node.js ali roda via LiteSpeed/Passenger, gerenciado pelo hPanel — sem
+> SSH root, sem PM2, sem `crontab -e` tradicional, variáveis de ambiente configuradas pela UI
+> do hPanel em vez de arquivo `.env`). Se o plano real for Business (compartilhado) e não VPS,
+> os passos 2 e 5 abaixo não se aplicam como estão escritos — o app ainda roda (é só Node.js),
+> mas start/restart/env/cron são feitos pela interface do hPanel, não por esses comandos de
+> shell. Confirmar o tipo de plano no painel da Hostinger antes de seguir.
+
 ## 1. Antes de fazer deploy
 
 - [ ] `npm run verify` limpo local (install + build + lint + typecheck).
@@ -17,12 +26,20 @@
 ```bash
 npm run build
 # next build com output:"standalone" gera .next/standalone/server.js sozinho —
-# copiar public/ e .next/static pra dentro antes de rodar:
+# copiar public/, .next/static E o .env pra dentro antes de rodar. O build standalone
+# NÃO inclui .env automaticamente (de propósito, pra não vazar secret pro bundle) —
+# esquecer esse cp faz o processo em produção morrer com "Missing env var: DATABASE_URL"
+# no primeiro request, mesmo com tudo certo localmente.
 cp -r public .next/standalone/public
 cp -r .next/static .next/standalone/.next/static
-pm2 start .next/standalone/server.js --name flux-track
+cp .env .next/standalone/.env
+cd .next/standalone && pm2 start server.js --name flux-track --cwd "$(pwd)"
 pm2 save
 ```
+
+- [ ] Confirmar que `.next/standalone/.env` existe e tem os valores de PRODUÇÃO (não é o
+      mesmo arquivo que fica na raiz durante o `npm run build` — é uma cópia física, então um
+      `.env` desatualizado ali fica servindo valores velhos até o próximo deploy).
 
 ## 3. Migração (rodar contra o banco de produção, com atenção)
 

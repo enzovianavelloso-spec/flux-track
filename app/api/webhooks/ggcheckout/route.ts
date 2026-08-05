@@ -35,7 +35,11 @@ async function logWebhook(row: {
     error: row.error,
     durationMs: row.durationMs,
     saleId: row.saleId,
-  }).catch(() => {}); // logging must never be the reason a webhook fails
+  }).catch((err) => {
+    // Logging must never be the reason a webhook fails, but a write failure here means the
+    // /admin diagnostics panel silently loses a row — worth a process-log line either way.
+    console.error("[webhook] failed to write webhook_logs row:", err);
+  });
 }
 
 // Persist-then-respond: the DB write for the sale finishes before we answer, so the
@@ -113,8 +117,13 @@ export async function POST(req: NextRequest) {
     });
 
     // Only confirmed payment triggers CAPI — *.generated feeds the funnel but isn't a Purchase yet.
-    // Not awaited on purpose (see function doc comment).
-    if (PAID_EVENTS.has(payload.event) && saved) {
+    // Not awaited on purpose (see function doc comment). Skip if already sent: GGCheckout
+    // (like most webhook providers) delivers at-least-once, so the same pix.paid/card.paid
+    // event can arrive more than once for the same sale. `saved.capiStatus` here reflects the
+    // row's state BEFORE this request touched it (capiStatus isn't in the onConflictDoUpdate
+    // SET list), so a redelivery after a prior success sees "sent" and doesn't fire again —
+    // without this check, every redelivery would trigger a fresh real Meta CAPI call.
+    if (PAID_EVENTS.has(payload.event) && saved && saved.capiStatus !== "sent") {
       void sendPurchaseEvent(saved);
     }
 

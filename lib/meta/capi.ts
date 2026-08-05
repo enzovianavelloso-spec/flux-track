@@ -74,20 +74,28 @@ export async function sendPurchaseEvent(sale: InferSelectModel<typeof sales>): P
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = await res.json().catch(() => ({}));
+    // res.status is always captured, even when Meta returns a non-JSON error body —
+    // {} alone previously discarded the one piece of info (HTTP status) needed to tell
+    // "rejected" apart from "malformed response" while reading /admin.
+    const json = await res.json().catch(() => ({ unparseable: true }));
 
     await db.update(sales).set({
       capiStatus: res.ok ? "sent" : "failed",
       capiAttempts: sql`${sales.capiAttempts} + 1`,
       capiSentAt: new Date(),
-      capiResponse: json,
+      capiResponse: { status: res.status, body: json },
     }).where(eq(sales.id, sale.id));
   } catch (err) {
     // Network failure, DNS, timeout, etc — never leave the row unaccounted for.
+    const message = err instanceof Error ? err.message : String(err);
     await db.update(sales).set({
       capiStatus: "failed",
       capiAttempts: sql`${sales.capiAttempts} + 1`,
-      capiResponse: { error: err instanceof Error ? err.message : String(err) },
-    }).where(eq(sales.id, sale.id)).catch(() => {}); // even the recovery write can fail; give up quietly
+      capiResponse: { error: message },
+    }).where(eq(sales.id, sale.id)).catch((updateErr) => {
+      // Even the recovery write can fail (e.g. DB down) — last resort is the process log,
+      // since at that point nothing in the database reflects this sale ever failed.
+      console.error(`[capi] lost failure record for sale ${sale.id}: send error="${message}", update error=`, updateErr);
+    });
   }
 }

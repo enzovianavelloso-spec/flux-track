@@ -38,9 +38,14 @@ contra produção.
 ## Endpoints
 
 - `GET /r?cid=&aid=&adid=&cname=&aname=&adnm=&plat=&fbclid=` — redirect de clique. Gera
-  clickid, grava em `clicks` (timeout de 800ms, nunca trava o redirect), seta cookie
-  first-party `flux_clickid` (30 dias, backup caso o JS da LP não carregue), 302 pra LP com
-  `utm_content=<clickid>`.
+  clickid, grava em `clicks` (timeout de 2.5s, tolerante a cold-start do Neon depois de
+  scale-to-zero; nunca trava o redirect), seta cookie `flux_clickid` (30 dias) no domínio do
+  flux-track, 302 pra LP com `utm_content=<clickid>`. **Atenção**: se a LP mora em domínio
+  diferente do flux-track (ex.: LP na Netlify, backend na Hostinger — configuração atual), esse
+  cookie fica no domínio do flux-track e **não** chega na LP — ele não serve de backup pro
+  `track.js`. A persistência do clickid na LP depende inteiramente do `track.js` capturando
+  `utm_content` da URL, então confirmar que ele está de fato instalado na LP é obrigatório
+  (ver `CHECKLIST_PRODUCAO.md`).
 - `POST /api/webhooks/ggcheckout` — recebe venda. Header `x-secret` ou
   `Authorization: Bearer` = `GGCHECKOUT_WEBHOOK_SECRET` (comparação constant-time). Sem
   secret configurado = rejeita tudo (a não ser em `DEV_MODE`). Toda request — validada ou

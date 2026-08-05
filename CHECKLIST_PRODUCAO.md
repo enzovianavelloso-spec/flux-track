@@ -1,5 +1,28 @@
 # Checklist de produção — antes de rodar campanha real com dinheiro de verdade
 
+## 🔴 BLOQUEADOR — Landing Page (fora do repo flux-track)
+
+Auditoria em 2026-08-04 confirmou ao vivo em `https://acalanto-page.netlify.app`:
+
+- [ ] **`track.js` não está instalado na LP.** Only script carregado hoje é o Microsoft
+      Clarity — nenhuma tag `<script src=".../track.js">`. Sem isso, `utm_content` (clickid)
+      chega na LP pela URL mas nunca é persistido nem propagado pro checkout.
+- [ ] **Os botões de compra ("Começar com o Essencial", "Quero dormir com o plano VIP") são
+      `<button>`, não `<a href>`.** `track.js` (no design atual) só reescreve `href` de links —
+      não tem o que reescrever aqui. Testado ao vivo: clicar em "Começar com o Essencial" abre
+      um modal de upsell ("SIM, ADICIONAR PACOTE" / "Não, seguir só com o plano Essencial");
+      clicando "Não, seguir só..." **nenhuma requisição de rede é disparada, nenhum redirect
+      acontece** — fica preso em `#planos`. Não encontrei, nos dois cliques testados, nenhum
+      link/redirect pro GGCheckout.
+- [ ] Confirmar com quem mantém a LP (projeto separado, provavelmente `acalanto-page/`) qual é
+      o mecanismo real de checkout: é um `window.location` via JS depois do modal? Abre em nova
+      aba? Ainda não foi implementado? — sem essa resposta, o pipeline inteiro
+      (clique → LP → checkout → webhook) não tem como funcionar, independente de quão robusto
+      o flux-track em si esteja.
+- [ ] Depois de saber o mecanismo real, ajustar `track.js`/a LP de acordo (ex.: se for JS
+      chamando uma função de checkout, essa função precisa ler o clickid salvo e anexar como
+      `utm_content` na URL que ela monta — troca de abordagem, não é um ajuste no flux-track).
+
 ## Meta
 
 - [ ] App criado em developers.facebook.com.

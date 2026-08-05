@@ -4,7 +4,10 @@ import { clicks } from "@/lib/db/schema";
 import { generateClickId } from "@/lib/clickid";
 import { env } from "@/lib/env";
 
-const INSERT_TIMEOUT_MS = 800;
+// Generous on purpose: Neon can cold-start after scale-to-zero (first hit after idle can take
+// 1-2s to wake compute). A short timeout here would silently drop exactly the clicks that
+// arrive right after a campaign resumes from a pause — a slow redirect beats a lost click.
+const INSERT_TIMEOUT_MS = 2500;
 
 // GET /r?cid=<campaign>&aid=<adset>&adid=<ad>&cname=<name>&aname=<adset name>&adnm=<ad name>&plat={{site_source_name}}&fbclid=...
 export async function GET(req: NextRequest) {
@@ -27,10 +30,12 @@ export async function GET(req: NextRequest) {
     referer: req.headers.get("referer"),
   });
 
-  // Never make the visitor wait on the DB — race against a short timeout, let insert
-  // finish/fail in the background either way. Losing an occasional row beats added latency.
+  // Never make the visitor wait on the DB — race against a timeout, let insert finish/fail
+  // in the background either way (the query itself isn't cancelled by losing the race, it
+  // keeps running against the pool). Logged, not swallowed: a real insert failure here is a
+  // silently-lost clickid, worth seeing in the process log even though we never blocked on it.
   await Promise.race([insert, new Promise((resolve) => setTimeout(resolve, INSERT_TIMEOUT_MS))])
-    .catch(() => {}); // insert failure never blocks the redirect
+    .catch((err) => { console.error(`[/r] click insert failed for ${clickid}:`, err); });
 
   const dest = new URL(env.landingPageUrl);
   dest.searchParams.set("utm_source", "facebook");
