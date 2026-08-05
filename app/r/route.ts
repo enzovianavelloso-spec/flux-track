@@ -39,5 +39,14 @@ export async function GET(req: NextRequest) {
   dest.searchParams.set("utm_content", clickid); // bare token only — recovery key, no suffix
   dest.searchParams.set("utm_term", "");
 
-  return NextResponse.redirect(dest, 302);
+  const res = NextResponse.redirect(dest, 302);
+  // First-party backup so the clickid survives even if track.js never loads (blocked JS,
+  // adblock, slow connection). track.js's own cookie/localStorage/sessionStorage still wins
+  // when present — this is just a floor, not the primary mechanism.
+  res.cookies.set("flux_clickid", clickid, {
+    maxAge: 30 * 24 * 60 * 60,
+    path: "/",
+    sameSite: "lax",
+  });
+  return res;
 }

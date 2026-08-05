@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm install && npm run build && npm run lint && npm run typecheck",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "sync-spend": "tsx scripts/sync-spend.ts"
+    "sync-spend": "tsx scripts/sync-spend.ts",
+    "retry-capi": "tsx scripts/retry-capi.ts"
   },
   "dependencies": {
     "next": "^15.0.0",

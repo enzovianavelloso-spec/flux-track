@@ -16,7 +16,11 @@ export interface DashboardResult {
   adSpend: number;
   roas: number | null;
   profit: number;
+  epc: number | null; // net revenue / clicks
+  cpa: number | null; // ad spend / paid sales
+  conversionRate: number | null; // paid / clicks
   funnel: { clicks: number; generated: number; paid: number };
+  dailyRevenue: { date: string; amount: number }[]; // last 14 days, for the sparkline
   filterOptions: {
     products: { id: string; name: string }[];
     trafficSources: string[];
@@ -66,22 +70,32 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
     .where(generatedConds.length ? and(...generatedConds) : undefined);
   const paidRow = await db.select({ n: sql<number>`count(*)` }).from(sales).where(and(...saleConds(f)));
 
-  const [productRows, sourceRows, platformRows] = await Promise.all([
+  const [productRows, sourceRows, platformRows, dailyRevenueRows] = await Promise.all([
     db.select({ id: products.id, name: products.name }).from(products),
     db.selectDistinct({ v: sales.utmSource }).from(sales),
     db.selectDistinct({ v: clicks.platform }).from(clicks),
+    db.select({
+      date: sql<string>`date(${sales.receivedAt})`,
+      amount: sql<string>`coalesce(sum(${sales.amount}), 0)`,
+    }).from(sales)
+      .where(and(eq(sales.status, "paid"), sql`${sales.receivedAt} >= now() - interval '14 days'`))
+      .groupBy(sql`date(${sales.receivedAt})`)
+      .orderBy(sql`date(${sales.receivedAt})`),
   ]);
+
+  const clicksCount = Number(clickCountRow[0]?.n ?? 0);
+  const paidCount = Number(paidRow[0]?.n ?? 0);
 
   return {
     netRevenue,
     adSpend,
     roas,
     profit,
-    funnel: {
-      clicks: Number(clickCountRow[0]?.n ?? 0),
-      generated: Number(generatedRow[0]?.n ?? 0),
-      paid: Number(paidRow[0]?.n ?? 0),
-    },
+    epc: clicksCount > 0 ? netRevenue / clicksCount : null,
+    cpa: paidCount > 0 ? adSpend / paidCount : null,
+    conversionRate: clicksCount > 0 ? paidCount / clicksCount : null,
+    funnel: { clicks: clicksCount, generated: Number(generatedRow[0]?.n ?? 0), paid: paidCount },
+    dailyRevenue: dailyRevenueRows.map((r) => ({ date: r.date, amount: Number(r.amount) })),
     filterOptions: {
       products: productRows,
       trafficSources: sourceRows.map((r) => r.v).filter((v): v is string => !!v),

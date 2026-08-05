@@ -12,4 +12,5 @@ export const env = {
   get metaCapiToken() { return required("META_CAPI_TOKEN"); },
   get metaAdAccountId() { return required("META_AD_ACCOUNT_ID"); },
   get metaTestEventCode() { return process.env.META_TEST_EVENT_CODE ?? undefined; },
+  get devMode() { return process.env.DEV_MODE === "true"; },
 };

@@ -41,6 +41,8 @@ export const clicks = pgTable("clicks", {
 }, (t) => [
   index("clicks_created_at_idx").on(t.createdAt),
   index("clicks_meta_campaign_id_idx").on(t.metaCampaignId),
+  index("clicks_meta_adset_id_idx").on(t.metaAdsetId),
+  index("clicks_meta_ad_id_idx").on(t.metaAdId),
 ]);
 
 export const sales = pgTable("sales", {
@@ -66,6 +68,7 @@ export const sales = pgTable("sales", {
   matched: boolean("matched").default(false),
   fbp: text("fbp"),
   capiStatus: text("capi_status").default("not_applicable"), // pending/sent/failed/not_applicable
+  capiAttempts: integer("capi_attempts").default(0).notNull(),
   capiSentAt: timestamp("capi_sent_at", { withTimezone: true }),
   capiResponse: jsonb("capi_response"),
   rawPayload: jsonb("raw_payload").notNull(), // full webhook body incl. products[] upsells
@@ -74,6 +77,28 @@ export const sales = pgTable("sales", {
   index("sales_status_idx").on(t.status),
   index("sales_product_id_idx").on(t.productId),
   index("sales_clickid_idx").on(t.clickid),
+  index("sales_capi_status_idx").on(t.capiStatus),
+]);
+
+// One row per inbound webhook request, written before any business-logic processing —
+// gives the /admin diagnostics panel and CAPI retry cron something to read even when
+// the request body was malformed or the secret check failed.
+export const webhookLogs = pgTable("webhook_logs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  provider: text("provider").notNull(), // "ggcheckout"
+  receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow(),
+  headers: jsonb("headers"), // sanitized: auth/secret headers stripped before storing
+  payload: jsonb("payload"),
+  validated: boolean("validated").notNull(),
+  processed: boolean("processed").default(false).notNull(),
+  error: text("error"),
+  retryCount: integer("retry_count").default(0).notNull(),
+  durationMs: integer("duration_ms"),
+  saleId: text("sale_id").references(() => sales.id),
+}, (t) => [
+  index("webhook_logs_received_at_idx").on(t.receivedAt),
+  index("webhook_logs_provider_idx").on(t.provider),
+  index("webhook_logs_processed_idx").on(t.processed),
 ]);
 
 export const adSpendSnapshots = pgTable("ad_spend_snapshots", {

@@ -1,69 +1,130 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { clicks, products, sales } from "@/lib/db/schema";
+import { clicks, products, sales, webhookLogs } from "@/lib/db/schema";
 import { verifyWebhookSecret } from "@/lib/ggcheckout/webhook-verify";
 import type { GgCheckoutWebhookPayload } from "@/lib/ggcheckout/payload-types";
 import { sendPurchaseEvent } from "@/lib/meta/capi";
 
 const PAID_EVENTS = new Set(["pix.paid", "card.paid"]);
+const REDACT_HEADERS = new Set(["x-secret", "authorization"]);
 
+function sanitizeHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    out[key] = REDACT_HEADERS.has(key.toLowerCase()) ? "[redacted]" : value;
+  });
+  return out;
+}
+
+async function logWebhook(row: {
+  validated: boolean;
+  processed: boolean;
+  headers: Record<string, string>;
+  payload: unknown;
+  error?: string;
+  durationMs: number;
+  saleId?: string;
+}) {
+  await db.insert(webhookLogs).values({
+    provider: "ggcheckout",
+    headers: row.headers,
+    payload: row.payload as object | undefined,
+    validated: row.validated,
+    processed: row.processed,
+    error: row.error,
+    durationMs: row.durationMs,
+    saleId: row.saleId,
+  }).catch(() => {}); // logging must never be the reason a webhook fails
+}
+
+// Persist-then-respond: the DB write for the sale finishes before we answer, so the
+// webhook is durable even if the process dies right after. Meta CAPI dispatch is NOT
+// awaited — this app runs as a long-lived PM2/standalone process (not serverless/edge),
+// so the fire-and-forget call keeps running after `return`. Any CAPI failure lands on
+// sales.capi_status via capi.ts's own try/catch, and scripts/retry-capi.ts sweeps it later.
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
+  const headers = sanitizeHeaders(req.headers);
+
   if (!verifyWebhookSecret(req.headers)) {
+    await logWebhook({ validated: false, processed: false, headers, payload: null, durationMs: Date.now() - startedAt });
     return NextResponse.json({ error: "invalid secret" }, { status: 401 });
   }
 
-  const payload = (await req.json()) as GgCheckoutWebhookPayload;
-
-  if (payload.product?.id) {
-    await db.insert(products)
-      .values({ id: payload.product.id, name: payload.product.title ?? payload.product.id })
-      .onConflictDoNothing();
+  let payload: GgCheckoutWebhookPayload;
+  try {
+    payload = (await req.json()) as GgCheckoutWebhookPayload;
+  } catch {
+    await logWebhook({ validated: true, processed: false, headers, payload: null, error: "invalid JSON body", durationMs: Date.now() - startedAt });
+    return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
 
-  // clickid recovery: utm_content carries the bare clickid if the LP round-trip worked.
-  // Present but no matching click row, or absent entirely -> clickid stays NULL, sale still saved.
-  let matchedClickId: string | null = null;
-  if (payload.utm_content) {
-    const found = await db.select({ id: clicks.id }).from(clicks).where(eq(clicks.id, payload.utm_content)).limit(1);
-    if (found.length) matchedClickId = found[0].id;
-  }
+  try {
+    if (payload.product?.id) {
+      await db.insert(products)
+        .values({ id: payload.product.id, name: payload.product.title ?? payload.product.id })
+        .onConflictDoNothing();
+    }
 
-  const [saved] = await db.insert(sales).values({
-    id: payload.id,
-    event: payload.event,
-    status: payload.status,
-    amount: String(payload.amount),
-    paymentMethod: payload.paymentMethod ?? payload.method,
-    gateway: payload.gateway,
-    productId: payload.product?.id,
-    customerEmail: payload.email,
-    customerName: payload.name,
-    customerDocument: payload.document,
-    customerPhone: payload.phone,
-    utmSource: payload.utm_source,
-    utmMedium: payload.utm_medium,
-    utmCampaign: payload.utm_campaign,
-    utmContent: payload.utm_content,
-    utmTerm: payload.utm_term,
-    clickid: matchedClickId,
-    matched: matchedClickId !== null,
-    rawPayload: payload,
-  }).onConflictDoUpdate({
-    target: sales.id,
-    set: {
+    // clickid recovery: utm_content carries the bare clickid if the LP round-trip worked.
+    // Present but no matching click row, or absent entirely -> clickid stays NULL, sale still saved.
+    let matchedClickId: string | null = null;
+    if (payload.utm_content) {
+      const found = await db.select({ id: clicks.id }).from(clicks).where(eq(clicks.id, payload.utm_content)).limit(1);
+      if (found.length) matchedClickId = found[0].id;
+    }
+
+    const [saved] = await db.insert(sales).values({
+      id: payload.id,
       event: payload.event,
       status: payload.status,
+      amount: String(payload.amount),
+      paymentMethod: payload.paymentMethod ?? payload.method,
+      gateway: payload.gateway,
+      productId: payload.product?.id,
+      customerEmail: payload.email,
+      customerName: payload.name,
+      customerDocument: payload.document,
+      customerPhone: payload.phone,
+      utmSource: payload.utm_source,
+      utmMedium: payload.utm_medium,
+      utmCampaign: payload.utm_campaign,
+      utmContent: payload.utm_content,
+      utmTerm: payload.utm_term,
+      clickid: matchedClickId,
       matched: matchedClickId !== null,
-      clickid: matchedClickId ?? sql`sales.clickid`, // keep prior match if this update has none
+      capiStatus: PAID_EVENTS.has(payload.event) ? "pending" : "not_applicable",
       rawPayload: payload,
-    },
-  }).returning();
+    }).onConflictDoUpdate({
+      target: sales.id,
+      set: {
+        event: payload.event,
+        status: payload.status,
+        matched: matchedClickId !== null,
+        clickid: matchedClickId ?? sql`sales.clickid`, // keep prior match if this update has none
+        rawPayload: payload,
+      },
+    }).returning();
 
-  // Only confirmed payment triggers CAPI — *.generated feeds the funnel but isn't a Purchase yet.
-  if (PAID_EVENTS.has(payload.event) && saved) {
-    await sendPurchaseEvent(saved).catch(() => {}); // CAPI failure never fails the webhook response
+    await logWebhook({
+      validated: true, processed: true, headers, payload,
+      durationMs: Date.now() - startedAt, saleId: saved?.id,
+    });
+
+    // Only confirmed payment triggers CAPI — *.generated feeds the funnel but isn't a Purchase yet.
+    // Not awaited on purpose (see function doc comment).
+    if (PAID_EVENTS.has(payload.event) && saved) {
+      void sendPurchaseEvent(saved);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    await logWebhook({
+      validated: true, processed: false, headers, payload,
+      error: err instanceof Error ? err.message : String(err),
+      durationMs: Date.now() - startedAt,
+    });
+    return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true });
 }
