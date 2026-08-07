@@ -12,7 +12,12 @@ const pool = new Pool({
   connectionString: env.databaseUrl,
   max: 10,
   idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
+  // 10s, not 5s: confirmed live against this exact Neon project — the first request after
+  // real idle (compute scaled to zero) can take longer than 5s to establish a connection,
+  // and a too-tight timeout here turns a cold-start into a 500 on the dashboard/webhook
+  // instead of just a slower first response. Still fails fast under genuine pool exhaustion
+  // (an already-awake Neon accepts connections in tens of ms, not seconds).
+  connectionTimeoutMillis: 10_000,
 });
 
 export const db = drizzle(pool, { schema });
