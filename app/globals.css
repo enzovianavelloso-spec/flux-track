@@ -1,0 +1,506 @@
+/*
+ * Flux Track — sistema de design
+ * Estilo: Data-Dense Dashboard (densidade 8/10) — muita informação por tela, respiro
+ * suficiente pra não cansar. Paleta "Financial Dashboard": fundo quase preto, verde pra
+ * resultado positivo, vermelho pra prejuízo. Escolhas vindas da skill ui-ux-pro-max.
+ */
+
+:root {
+  /* ---- Superfícies ---- */
+  --fundo: #020617;
+  --fundo-alto: #070c1a;   /* barra fixa do topo, com blur por cima do conteúdo */
+  --cartao: #0e1223;
+  --cartao-hover: #131834;
+  --suave: #1a1e2f;        /* fundo de campo, badge neutro, trilho de barra */
+  --borda: #232a42;
+  --borda-forte: #334155;
+
+  /* ---- Texto ---- */
+  --texto: #f8fafc;
+  --texto-suave: #94a3b8;  /* 7,2:1 sobre --cartao */
+  /* 5,2:1 sobre --cartao. Era #64748b (3,9:1) e reprovava no WCAG AA — carrega
+     informação de verdade (nota das métricas, cabeçalho de tabela), não é decoração. */
+  --texto-fraco: #78899f;
+
+  /* ---- Semântica ---- */
+  --positivo: #22c55e;
+  --positivo-fundo: rgba(34, 197, 94, 0.12);
+  --negativo: #ef4444;
+  --negativo-fundo: rgba(239, 68, 68, 0.12);
+  --atencao: #f59e0b;
+  --atencao-fundo: rgba(245, 158, 11, 0.12);
+  --dado: #38bdf8;         /* azul de série de dados, distinto do verde de resultado */
+  --dado-fundo: rgba(56, 189, 248, 0.12);
+
+  /* ---- Espaçamento (escala densa 4/8) ---- */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 16px;
+  --e5: 24px;
+  --e6: 32px;
+  --e7: 48px;
+
+  --raio: 10px;
+  --raio-p: 6px;
+  --raio-pill: 999px;
+
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sombra-alta: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* ---- Movimento ---- */
+  --rapido: 150ms;
+  --medio: 240ms;
+  --saida: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--fonte-ui), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Brilho sutil no topo — dá profundidade sem custar nada em performance
+     (gradiente estático, não anima, não repinta). */
+  background-image: radial-gradient(900px 400px at 50% -160px, rgba(56, 189, 248, 0.07), transparent);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Todo número alinhado em coluna: figuras tabulares impedem que o valor "pule"
+   de largura ao atualizar (regra number-tabular da ui-ux-pro-max). */
+.num {
+  font-family: var(--fonte-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Foco visível (nunca remover: navegação por teclado) ---------- */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--dado);
+  outline-offset: 2px;
+  border-radius: var(--raio-p);
+}
+
+/* ---------- Estrutura ---------- */
+.pagina {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--e5) var(--e4) var(--e7);
+}
+
+@media (min-width: 768px) {
+  .pagina { padding: var(--e6) var(--e5) var(--e7); }
+}
+
+/* ---------- Barra do topo ---------- */
+.topo {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--fundo-alto) 82%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--borda);
+}
+
+.topo-interno {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--e3) var(--e4);
+  display: flex;
+  align-items: center;
+  gap: var(--e4);
+}
+
+@media (min-width: 768px) {
+  .topo-interno { padding: var(--e3) var(--e5); }
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--texto);
+  text-decoration: none;
+}
+
+.marca svg { display: block; }
+
+.nav {
+  display: flex;
+  gap: var(--e1);
+  margin-left: var(--e4);
+}
+
+.nav a {
+  color: var(--texto-suave);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: var(--e2) var(--e3);
+  border-radius: var(--raio-p);
+  transition: background var(--rapido), color var(--rapido);
+}
+
+.nav a:hover { background: var(--suave); color: var(--texto); }
+
+/* Localização atual precisa ser visível, não só pelo hover (regra nav-state-active) */
+.nav a[aria-current="page"] {
+  background: var(--suave);
+  color: var(--texto);
+}
+
+.status-conexao {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-size: 12px;
+  color: var(--texto-suave);
+}
+
+.ponto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--positivo);
+  box-shadow: 0 0 0 3px var(--positivo-fundo);
+}
+
+/* ---------- Cabeçalho de seção ---------- */
+.cabecalho {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e3);
+  flex-wrap: wrap;
+  margin-bottom: var(--e5);
+}
+
+.titulo {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitulo {
+  color: var(--texto-suave);
+  font-size: 13px;
+  margin: 0;
+}
+
+.rotulo-seccao {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+  margin-bottom: var(--e3);
+}
+
+/* ---------- Filtros ---------- */
+.filtros {
+  display: flex;
+  gap: var(--e2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--e4);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  min-height: 34px;
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-pill);
+  color: var(--texto-suave);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--rapido), border-color var(--rapido), color var(--rapido);
+}
+
+.pill:hover {
+  background: var(--cartao-hover);
+  border-color: var(--borda-forte);
+  color: var(--texto);
+}
+
+.pill[aria-current="true"] {
+  background: var(--dado-fundo);
+  border-color: var(--dado);
+  color: var(--dado);
+}
+
+.campo {
+  background: var(--cartao);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-p);
+  padding: var(--e2) var(--e3);
+  min-height: 36px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color var(--rapido);
+}
+
+.campo:hover { border-color: var(--borda-forte); }
+
+/* O ícone nativo de calendário nasce preto e some no fundo escuro */
+input[type="date"].campo::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.botao {
+  background: var(--dado);
+  color: #04121f;
+  border: 1px solid transparent;
+  border-radius: var(--raio-p);
+  padding: var(--e2) var(--e4);
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter var(--rapido);
+}
+
+.botao:hover { filter: brightness(1.1); }
+.botao:active { filter: brightness(0.95); }
+
+/* Em tela de toque: alvo mínimo de 44px e fonte de 16px nos campos.
+   Abaixo de 16px, o iOS dá zoom sozinho ao focar o campo e desalinha a tela toda. */
+@media (pointer: coarse) {
+  .pill, .campo, .botao { min-height: 44px; }
+  .campo { font-size: 16px; }
+  .nav a { padding: var(--e3); }
+}
+
+/* ---------- Cartões ---------- */
+.grade {
+  display: grid;
+  gap: var(--e3);
+  margin-bottom: var(--e3);
+}
+
+.grade-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grade-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (min-width: 900px) {
+  .grade-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grade-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.cartao {
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: var(--e4);
+  box-shadow: var(--sombra);
+  transition: border-color var(--rapido), background var(--rapido);
+}
+
+.cartao-metrica:hover {
+  border-color: var(--borda-forte);
+  background: var(--cartao-hover);
+}
+
+.metrica-rotulo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--texto-suave);
+  margin-bottom: var(--e2);
+}
+
+.metrica-valor {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.metrica-nota {
+  font-size: 12px;
+  color: var(--texto-fraco);
+  margin-top: var(--e1);
+}
+
+.positivo { color: var(--positivo); }
+.negativo { color: var(--negativo); }
+.vazio { color: var(--texto-fraco); }
+
+/* ---------- Selo de status ---------- */
+.selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px var(--e2);
+  border-radius: var(--raio-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selo-ok { background: var(--positivo-fundo); color: var(--positivo); }
+.selo-erro { background: var(--negativo-fundo); color: var(--negativo); }
+.selo-espera { background: var(--atencao-fundo); color: var(--atencao); }
+.selo-neutro { background: var(--suave); color: var(--texto-suave); }
+
+/* ---------- Funil ---------- */
+/* Contagem e percentual em colunas separadas de propósito: encostados um no outro,
+   "40" e "6,1%" se leem como o número único "406,1%". */
+.funil-linha {
+  display: grid;
+  grid-template-columns: 108px 1fr 64px 62px;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e2) 0;
+}
+
+.funil-nome { font-size: 13px; color: var(--texto-suave); }
+
+.funil-trilho {
+  height: 26px;
+  background: var(--suave);
+  border-radius: var(--raio-p);
+  overflow: hidden;
+}
+
+.funil-barra {
+  height: 100%;
+  border-radius: var(--raio-p);
+  transform-origin: left center;
+  animation: cresce var(--medio) var(--saida) both;
+}
+
+.funil-valor {
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.funil-pct {
+  color: var(--texto-fraco);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* ---------- Tabelas ---------- */
+.tabela-rolagem {
+  overflow-x: auto;
+  margin: 0 calc(var(--e4) * -1);
+  padding: 0 var(--e4);
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tabela th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+  padding: var(--e2) var(--e3);
+  border-bottom: 1px solid var(--borda);
+}
+
+.tabela td {
+  padding: var(--e3);
+  border-bottom: 1px solid rgba(35, 42, 66, 0.6);
+  color: var(--texto);
+}
+
+.tabela tbody tr {
+  transition: background var(--rapido);
+}
+
+.tabela tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+.tabela tbody tr:last-child td { border-bottom: none; }
+
+.id-curto {
+  font-family: var(--fonte-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--texto-suave);
+}
+
+.sem-dado {
+  color: var(--texto-fraco);
+  padding: var(--e5) var(--e3);
+  text-align: center;
+}
+
+/* ---------- Gráfico ---------- */
+.grafico { width: 100%; height: auto; display: block; overflow: visible; }
+.grafico-grade { stroke: var(--borda); stroke-width: 1; opacity: 0.5; }
+.grafico-eixo { fill: var(--texto-fraco); font-size: 10px; }
+
+.grafico-linha {
+  fill: none;
+  stroke: var(--positivo);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Entrada em cascata ----------
+   Cascata leve nos cartões (~50ms entre eles). CSS puro de propósito: uma
+   biblioteca de animação aqui seria peso novo pra algo que keyframes já resolvem. */
+.entra {
+  animation: sobe var(--medio) var(--saida) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes sobe {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes cresce {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes desenha {
+  from { stroke-dashoffset: var(--comprimento); }
+  to { stroke-dashoffset: 0; }
+}
+
+.grafico-linha-anima {
+  stroke-dasharray: var(--comprimento);
+  animation: desenha 900ms var(--saida) both;
+}
+
+/* Movimento reduzido: tudo aparece no estado final, sem transição.
+   Obrigatório — animação não pode ser condição pra ver a informação. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
