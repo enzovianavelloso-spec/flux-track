@@ -1,36 +1,60 @@
 /*
  * Flux Track — sistema de design
- * Estilo: Data-Dense Dashboard (densidade 8/10) — muita informação por tela, respiro
- * suficiente pra não cansar. Paleta "Financial Dashboard": fundo quase preto, verde pra
- * resultado positivo, vermelho pra prejuízo. Escolhas vindas da skill ui-ux-pro-max.
+ * Estilo: Glass escuro fluido — vidro fosco sobre blobs ambientes, glow semântico nas
+ * métricas, cascata + count-up orquestrados via GSAP (app/anima.tsx). Base "Modern Dark
+ * (Cinema)" + Glassmorphism, pesquisadas via ui-ux-pro-max. Fundo nunca preto puro (OLED
+ * smear); verde/vermelho continuam a semântica financeira de lucro/prejuízo — a paleta
+ * "trend" da skill sugeria indigo/roxo como cor de resultado, mas isso quebraria a leitura
+ * de "ganhei ou perdi dinheiro" num produto financeiro brasileiro. Indigo vira cor de marca.
  */
 
 :root {
   /* ---- Superfícies ---- */
   --fundo: #020617;
-  --fundo-alto: #070c1a;   /* barra fixa do topo, com blur por cima do conteúdo */
-  --cartao: #0e1223;
+  --fundo-alto: #070c1a;   /* barra fixa do topo */
+  --cartao: #0e1223;       /* fallback sólido — ver @supports abaixo */
   --cartao-hover: #131834;
   --suave: #1a1e2f;        /* fundo de campo, badge neutro, trilho de barra */
   --borda: #232a42;
   --borda-forte: #334155;
 
+  /* Glass: vidro escuro translúcido, não branco — branco a 10% sobre um blob colorido
+     derruba o contraste do texto abaixo de 4,5:1 nos cantos mais claros do blob.
+     Escurecer o próprio vidro garante contraste independente do que está atrás. */
+  --vidro: rgba(8, 11, 24, 0.62);
+  --vidro-alto: rgba(13, 17, 34, 0.74);
+  --vidro-borda: rgba(255, 255, 255, 0.09);
+  --vidro-borda-forte: rgba(255, 255, 255, 0.18);
+  --desfoque: 18px;
+
   /* ---- Texto ---- */
   --texto: #f8fafc;
   --texto-suave: #94a3b8;  /* 7,2:1 sobre --cartao */
-  /* 5,2:1 sobre --cartao. Era #64748b (3,9:1) e reprovava no WCAG AA — carrega
-     informação de verdade (nota das métricas, cabeçalho de tabela), não é decoração. */
-  --texto-fraco: #78899f;
+  --texto-fraco: #78899f;  /* 5,2:1 sobre --cartao — carrega informação real, não decoração */
 
   /* ---- Semântica ---- */
   --positivo: #22c55e;
   --positivo-fundo: rgba(34, 197, 94, 0.12);
   --negativo: #ef4444;
   --negativo-fundo: rgba(239, 68, 68, 0.12);
+  /* Vermelho mais claro só pro texto do selo: subir a opacidade do fundo pra ganhar
+     contraste piora — texto e fundo são o mesmo vermelho, então fundo mais opaco
+     aproxima a luminância do fundo da do texto (4,14:1 -> 3,65:1, na direção errada).
+     Clarear só o texto do badge resolve sem mexer no fundo nem no --negativo usado
+     em valores grandes (lucro/prejuízo), que já passa AA-large com folga. */
+  --negativo-selo: #fca5a5;
   --atencao: #f59e0b;
   --atencao-fundo: rgba(245, 158, 11, 0.12);
-  --dado: #38bdf8;         /* azul de série de dados, distinto do verde de resultado */
-  --dado-fundo: rgba(56, 189, 248, 0.12);
+
+  /* Marca/interação — indigo sólido, nunca gradiente roxo→rosa (anti-padrão do próprio
+     estilo pesquisado: lê como IA genérica, não como fintech). */
+  --marca: #818cf8;
+  --marca-forte: #6366f1;
+  --marca-fundo: rgba(129, 140, 248, 0.14);
+
+  --brilho-positivo: 0 0 28px rgba(34, 197, 94, 0.32);
+  --brilho-negativo: 0 0 28px rgba(239, 68, 68, 0.28);
+  --brilho-marca: 0 0 28px rgba(129, 140, 248, 0.28);
 
   /* ---- Espaçamento (escala densa 4/8) ---- */
   --e1: 4px;
@@ -41,17 +65,18 @@
   --e6: 32px;
   --e7: 48px;
 
-  --raio: 10px;
-  --raio-p: 6px;
+  --raio: 14px;
+  --raio-p: 8px;
   --raio-pill: 999px;
 
   --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sombra-alta: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --sombra-alta: 0 20px 48px rgba(0, 0, 0, 0.5);
 
   /* ---- Movimento ---- */
   --rapido: 150ms;
   --medio: 240ms;
-  --saida: cubic-bezier(0.16, 1, 0.3, 1);
+  --lento: 600ms;         /* tier "Complex" da pesquisa gsap — cascata de entrada */
+  --saida: cubic-bezier(0.16, 1, 0.3, 1); /* expo.out */
 }
 
 * { box-sizing: border-box; }
@@ -68,12 +93,10 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  /* Brilho sutil no topo — dá profundidade sem custar nada em performance
-     (gradiente estático, não anima, não repinta). */
-  background-image: radial-gradient(900px 400px at 50% -160px, rgba(56, 189, 248, 0.07), transparent);
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  overflow-x: clip; /* os blobs saem um pouco da viewport de propósito, nunca geram scroll */
 }
+
+h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sans-serif; }
 
 /* Todo número alinhado em coluna: figuras tabulares impedem que o valor "pule"
    de largura ao atualizar (regra number-tabular da ui-ux-pro-max). */
@@ -85,9 +108,71 @@ body {
 
 /* ---------- Foco visível (nunca remover: navegação por teclado) ---------- */
 :where(a, button, input, select, [tabindex]):focus-visible {
-  outline: 2px solid var(--dado);
+  outline: 2px solid var(--marca);
   outline-offset: 2px;
   border-radius: var(--raio-p);
+}
+
+/* ---------- Blobs ambientes ----------
+   Fixed, atrás de tudo, nunca capturam clique. CSS puro: são só transform oscilando bem
+   devagar (30-45s) — não precisam de GSAP, e um JS orquestrando isso seria trabalho extra
+   pra um resultado que @keyframes já entrega de graça. */
+.ambiente {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.blob-1 {
+  width: 46vw; height: 46vw;
+  top: -12vw; left: -8vw;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.22), transparent 70%);
+  animation: deriva-1 34s ease-in-out infinite;
+}
+
+.blob-2 {
+  width: 40vw; height: 40vw;
+  bottom: -14vw; right: -6vw;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.16), transparent 70%);
+  animation: deriva-2 41s ease-in-out infinite;
+}
+
+.blob-3 {
+  width: 30vw; height: 30vw;
+  top: 30vh; right: 12vw;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.14), transparent 70%);
+  animation: deriva-3 38s ease-in-out infinite;
+}
+
+@keyframes deriva-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vw, 8vh) scale(1.12); }
+}
+@keyframes deriva-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-7vw, -6vh) scale(1.08); }
+}
+@keyframes deriva-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-5vw, 5vh) scale(0.9); }
+}
+
+/* Blobs somem em tela pequena e sob movimento reduzido: em telas pequenas o filter:blur
+   de elementos grandes é o tipo de trabalho que mais pesa no compositor de aparelhos
+   fracos, e é o efeito que menos se nota numa tela de 375px de largura. */
+@media (max-width: 640px), (prefers-reduced-motion: reduce) {
+  .blob { animation: none; }
+  .blob-3 { display: none; }
 }
 
 /* ---------- Estrutura ---------- */
@@ -106,9 +191,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--fundo-alto) 82%, transparent);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--borda);
+  background: color-mix(in srgb, var(--fundo-alto) 70%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--vidro-borda);
 }
 
 .topo-interno {
@@ -133,6 +219,7 @@ body {
   letter-spacing: -0.01em;
   color: var(--texto);
   text-decoration: none;
+  font-family: var(--fonte-display), var(--fonte-ui), sans-serif;
 }
 
 .marca svg { display: block; }
@@ -157,8 +244,8 @@ body {
 
 /* Localização atual precisa ser visível, não só pelo hover (regra nav-state-active) */
 .nav a[aria-current="page"] {
-  background: var(--suave);
-  color: var(--texto);
+  background: var(--marca-fundo);
+  color: var(--marca);
 }
 
 .status-conexao {
@@ -176,6 +263,12 @@ body {
   border-radius: 50%;
   background: var(--positivo);
   box-shadow: 0 0 0 3px var(--positivo-fundo);
+  animation: pulsa 2.4s ease-in-out infinite;
+}
+
+@keyframes pulsa {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 /* ---------- Cabeçalho de seção ---------- */
@@ -188,7 +281,7 @@ body {
 }
 
 .titulo {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.02em;
   margin: 0;
@@ -224,33 +317,39 @@ body {
   gap: var(--e2);
   padding: var(--e2) var(--e3);
   min-height: 34px;
-  background: var(--cartao);
-  border: 1px solid var(--borda);
+  background: var(--vidro);
+  backdrop-filter: blur(var(--desfoque));
+  -webkit-backdrop-filter: blur(var(--desfoque));
+  border: 1px solid var(--vidro-borda);
   border-radius: var(--raio-pill);
   color: var(--texto-suave);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition: background var(--rapido), border-color var(--rapido), color var(--rapido);
+  transition: background var(--rapido), border-color var(--rapido), color var(--rapido), transform var(--rapido);
 }
 
 .pill:hover {
-  background: var(--cartao-hover);
-  border-color: var(--borda-forte);
+  background: var(--vidro-alto);
+  border-color: var(--vidro-borda-forte);
   color: var(--texto);
 }
 
+.pill:active { transform: scale(0.97); }
+
 .pill[aria-current="true"] {
-  background: var(--dado-fundo);
-  border-color: var(--dado);
-  color: var(--dado);
+  background: var(--marca-fundo);
+  border-color: var(--marca);
+  color: var(--marca);
 }
 
 .campo {
-  background: var(--cartao);
+  background: var(--vidro);
+  backdrop-filter: blur(var(--desfoque));
+  -webkit-backdrop-filter: blur(var(--desfoque));
   color: var(--texto);
-  border: 1px solid var(--borda);
+  border: 1px solid var(--vidro-borda);
   border-radius: var(--raio-p);
   padding: var(--e2) var(--e3);
   min-height: 36px;
@@ -259,7 +358,7 @@ body {
   transition: border-color var(--rapido);
 }
 
-.campo:hover { border-color: var(--borda-forte); }
+.campo:hover { border-color: var(--vidro-borda-forte); }
 
 /* O ícone nativo de calendário nasce preto e some no fundo escuro */
 input[type="date"].campo::-webkit-calendar-picker-indicator {
@@ -268,8 +367,8 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 }
 
 .botao {
-  background: var(--dado);
-  color: #04121f;
+  background: var(--marca-forte);
+  color: #f5f5ff;
   border: 1px solid transparent;
   border-radius: var(--raio-p);
   padding: var(--e2) var(--e4);
@@ -278,11 +377,12 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: filter var(--rapido);
+  box-shadow: var(--brilho-marca);
+  transition: filter var(--rapido), transform var(--rapido);
 }
 
-.botao:hover { filter: brightness(1.1); }
-.botao:active { filter: brightness(0.95); }
+.botao:hover { filter: brightness(1.12); }
+.botao:active { filter: brightness(0.95); transform: scale(0.97); }
 
 /* Em tela de toque: alvo mínimo de 44px e fonte de 16px nos campos.
    Abaixo de 16px, o iOS dá zoom sozinho ao focar o campo e desalinha a tela toda. */
@@ -308,17 +408,37 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 }
 
 .cartao {
-  background: var(--cartao);
-  border: 1px solid var(--borda);
+  position: relative;
+  background: var(--vidro);
+  backdrop-filter: blur(var(--desfoque));
+  -webkit-backdrop-filter: blur(var(--desfoque));
+  border: 1px solid var(--vidro-borda);
   border-radius: var(--raio);
   padding: var(--e4);
   box-shadow: var(--sombra);
-  transition: border-color var(--rapido), background var(--rapido);
+  transition: border-color var(--rapido), background var(--rapido), transform var(--rapido);
+}
+
+/* Navegador sem suporte a backdrop-filter: vidro translúcido sobre blob viraria ilegível.
+   Cai pro cartão sólido — mesmo visual do redesign anterior, só como piso de segurança. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cartao, .pill, .campo, .topo {
+    background: var(--cartao);
+  }
 }
 
 .cartao-metrica:hover {
-  border-color: var(--borda-forte);
-  background: var(--cartao-hover);
+  border-color: var(--vidro-borda-forte);
+  background: var(--vidro-alto);
+}
+
+.cartao-hero {
+  background: linear-gradient(155deg, var(--vidro-alto), var(--vidro));
+  border-color: var(--vidro-borda-forte);
+}
+
+@media (min-width: 900px) {
+  .cartao-hero { grid-column: span 2; }
 }
 
 .metrica-rotulo {
@@ -338,15 +458,18 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   line-height: 1.15;
 }
 
+.metrica-valor-hero {
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
 .metrica-nota {
   font-size: 12px;
   color: var(--texto-fraco);
   margin-top: var(--e1);
 }
-
-.positivo { color: var(--positivo); }
-.negativo { color: var(--negativo); }
-.vazio { color: var(--texto-fraco); }
 
 /* ---------- Selo de status ---------- */
 .selo {
@@ -361,7 +484,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 }
 
 .selo-ok { background: var(--positivo-fundo); color: var(--positivo); }
-.selo-erro { background: var(--negativo-fundo); color: var(--negativo); }
+.selo-erro { background: var(--negativo-fundo); color: var(--negativo-selo); }
 .selo-espera { background: var(--atencao-fundo); color: var(--atencao); }
 .selo-neutro { background: var(--suave); color: var(--texto-suave); }
 
@@ -405,10 +528,11 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Tabelas ---------- */
+/* Sem margem negativa: cortava o anel de foco de quem navega por teclado perto da borda.
+   scroll-padding garante que o elemento focado nunca fique colado na borda que rola. */
 .tabela-rolagem {
   overflow-x: auto;
-  margin: 0 calc(var(--e4) * -1);
-  padding: 0 var(--e4);
+  scroll-padding: var(--e2);
 }
 
 .tabela {
@@ -426,12 +550,15 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   text-transform: uppercase;
   color: var(--texto-fraco);
   padding: var(--e2) var(--e3);
-  border-bottom: 1px solid var(--borda);
+  border-bottom: 1px solid var(--vidro-borda);
 }
 
-.tabela td {
+/* :where() zera a especificidade da cor padrão — sem isso, ".tabela td" (0,1,1) vence
+   ".negativo"/".vazio" (0,1,0) sozinhas mesmo vindo depois no arquivo, e toda célula de
+   erro renderizava em branco (--texto) em vez de vermelho. Achado auditando contraste. */
+.tabela :where(td) {
   padding: var(--e3);
-  border-bottom: 1px solid rgba(35, 42, 66, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   color: var(--texto);
 }
 
@@ -439,7 +566,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   transition: background var(--rapido);
 }
 
-.tabela tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+.tabela tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .tabela tbody tr:last-child td { border-bottom: none; }
 
 .id-curto {
@@ -454,32 +581,71 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   text-align: center;
 }
 
+/* Especificidade empatada com ".tabela :where(td)" (ambas 0,1,0 — o :where() zera a
+   contagem do "td") é resolvida por ORDEM no arquivo: como estas regras vêm depois,
+   vencem dentro de <td> mesmo sem serem mais específicas. Precisa continuar depois do
+   bloco ".tabela" — testado ao vivo: definidas antes, o texto de erro saía branco. */
+.positivo { color: var(--positivo); text-shadow: var(--brilho-positivo); }
+.negativo { color: var(--negativo); text-shadow: var(--brilho-negativo); }
+.vazio { color: var(--texto-fraco); text-shadow: none; }
+
 /* ---------- Gráfico ---------- */
 .grafico { width: 100%; height: auto; display: block; overflow: visible; }
-.grafico-grade { stroke: var(--borda); stroke-width: 1; opacity: 0.5; }
+.grafico-grade { stroke: var(--vidro-borda-forte); stroke-width: 1; }
 .grafico-eixo { fill: var(--texto-fraco); font-size: 10px; }
+.grafico-teto { fill: var(--texto-fraco); font-size: 10px; }
 
 .grafico-linha {
   fill: none;
   stroke: var(--positivo);
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* ---------- Entrada em cascata ----------
-   Cascata leve nos cartões (~50ms entre eles). CSS puro de propósito: uma
-   biblioteca de animação aqui seria peso novo pra algo que keyframes já resolvem. */
-.entra {
-  animation: sobe var(--medio) var(--saida) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
+/* Ponto interativo: círculo de acerto grande (mira de toque) mas visível só na área
+   pequena central — a mira maior não devia poluir visualmente o traço da linha. */
+.grafico-ponto { cursor: pointer; }
+
+.grafico-ponto-visivel {
+  fill: var(--fundo);
+  stroke: var(--positivo);
+  stroke-width: 2;
+  opacity: 0;
+  transition: opacity var(--rapido);
 }
 
-@keyframes sobe {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+.grafico-ponto:hover .grafico-ponto-visivel,
+.grafico-ponto:focus-visible .grafico-ponto-visivel {
+  opacity: 1;
 }
 
+.grafico-tooltip {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--rapido);
+}
+
+.grafico-ponto:hover .grafico-tooltip,
+.grafico-ponto:focus-visible .grafico-tooltip {
+  opacity: 1;
+}
+
+.grafico-tooltip rect {
+  fill: var(--fundo-alto);
+  stroke: var(--vidro-borda-forte);
+}
+
+.grafico-tooltip text {
+  fill: var(--texto);
+  font-size: 11px;
+  font-family: var(--fonte-mono), ui-monospace, monospace;
+}
+
+/* ---------- Animações compartilhadas (CSS puro: traço do gráfico e barra do funil) ----------
+   A cascata de entrada dos cartões e o count-up dos números viraram GSAP (app/anima.tsx) —
+   orquestrar timeline + tweenar innerText por keyframe puro vira gambiarra bem rápido.
+   O que já era simples o bastante em CSS (um valor indo de 0 a 1) continua CSS. */
 @keyframes cresce {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
@@ -496,7 +662,8 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 }
 
 /* Movimento reduzido: tudo aparece no estado final, sem transição.
-   Obrigatório — animação não pode ser condição pra ver a informação. */
+   Obrigatório — animação não pode ser condição pra ver a informação. GSAP respeita a mesma
+   preferência via gsap.matchMedia() em app/anima.tsx; isto cobre o que ainda é CSS puro. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
