@@ -48,6 +48,12 @@ LP qual é o mecanismo real de checkout antes de ligar qualquer campanha. Detalh
 Todos os fixes rodaram contra o Neon real: `npm run typecheck` / `npm run lint` / `npm run build`
 limpos, teste end-to-end do bug #1 confirmado ao vivo (ver seção 2 da tabela).
 
+**Addendum (mesmo dia, pego ao vivo abrindo o preview)**: o próprio fix #7 (`connectionTimeoutMillis`)
+tinha valor curto demais (5s) — primeira carga do dashboard depois de idle bateu exatamente no
+cold-start do Neon descrito no bug #8 e caiu com 500 ("Connection terminated due to connection
+timeout"). Reload seguinte funcionou (compute já acordado). Corrigido pra 10s (commit `e6626a6`),
+reconfirmado funcionando: dashboard, `/admin` e `/api/health` todos 200 depois do ajuste.
+
 ---
 
 ## 3. Checklist do audit original — resultado item a item
