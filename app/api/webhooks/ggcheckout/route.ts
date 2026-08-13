@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       id: payload.id,
       event: payload.event,
       status: payload.status,
-      amount: String(payload.amount),
+      amount: payload.amount != null ? String(payload.amount) : null,
       paymentMethod: payload.paymentMethod ?? payload.method,
       gateway: payload.gateway,
       productId: payload.product?.id,
