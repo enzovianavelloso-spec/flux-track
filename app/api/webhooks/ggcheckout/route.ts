@@ -65,6 +65,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // GGCheckout dispara um POST de teste (sem payment.id real) ao salvar/testar o webhook no
+    // painel — não é venda, só valida que a URL responde. Sem id não há o que gravar em `sales`
+    // (PK not-null), mas ainda é sucesso: o teste só quer 200 de volta.
+    if (!payload.id) {
+      await logWebhook({ validated: true, processed: true, headers, payload, durationMs: Date.now() - startedAt });
+      return NextResponse.json({ ok: true });
+    }
+
     if (payload.product?.id) {
       await db.insert(products)
         .values({ id: payload.product.id, name: payload.product.title ?? payload.product.id })
