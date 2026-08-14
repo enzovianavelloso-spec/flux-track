@@ -24,11 +24,16 @@ export async function fetchYesterdayAndTodayInsights(): Promise<InsightRow[]> {
     "ad_id", "ad_name", "spend", "impressions", "clicks", "account_currency",
   ].join(",");
 
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
   const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${env.metaAdAccountId}/insights`);
   url.searchParams.set("level", "ad");
   url.searchParams.set("fields", fields);
   url.searchParams.set("time_increment", "1"); // break out by day
-  url.searchParams.set("date_preset", "yesterday_and_today");
+  // "yesterday_and_today" isn't a valid date_preset (Meta only accepts named presets like
+  // "yesterday"/"today" or an explicit range) — this API call 400'd on every run until now.
+  url.searchParams.set("time_range", JSON.stringify({ since: yesterday, until: today }));
   url.searchParams.set("access_token", env.metaCapiToken);
 
   const res = await fetch(url);
