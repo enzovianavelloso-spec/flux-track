@@ -9,7 +9,9 @@ webpush.setVapidDetails("mailto:enzovianavelloso@gmail.com", env.vapidPublicKey,
 interface SalePushPayload {
   title: string;
   body: string;
-  amount: number;
+  // Único por notificação — mesma tag faz o navegador SUBSTITUIR a notificação anterior em
+  // vez de empilhar. Sem isso, 2 vendas seguidas mostram só a última na tela de bloqueio.
+  tag: string;
 }
 
 // Fire-and-forget from the webhook, same pattern as sendPurchaseEvent (lib/meta/capi.ts):
@@ -25,7 +27,7 @@ export async function notifySale(payload: SalePushPayload): Promise<void> {
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys },
-        JSON.stringify({ ...payload, tag: "venda", url: "/" }),
+        JSON.stringify({ ...payload, url: "/" }),
       );
     } catch (err) {
       const statusCode = (err as { statusCode?: number }).statusCode;

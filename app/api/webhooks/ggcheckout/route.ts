@@ -10,6 +10,14 @@ import { notifySale } from "@/lib/push/send";
 const PAID_EVENTS = new Set(["pix.paid", "card.paid"]);
 const REDACT_HEADERS = new Set(["x-secret", "authorization"]);
 
+function rotuloMetodo(event: string): string {
+  return event.startsWith("pix") ? "Pix" : "Cartão";
+}
+
+function formatarValor(amount: number | undefined): string {
+  return `Valor: R$ ${Number(amount ?? 0).toFixed(2).replace(".", ",")}`;
+}
+
 function sanitizeHeaders(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {};
   headers.forEach((value, key) => {
@@ -80,6 +88,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // Sabe se essa venda já existia ANTES deste POST — usado abaixo pra só notificar
+    // "gerado" na primeira vez que essa venda aparece (redelivery do mesmo evento não
+    // deve gerar uma segunda notificação de "gerado").
+    const existiaAntes = await db.select({ id: sales.id }).from(sales).where(eq(sales.id, paymentId)).limit(1);
+    const eraNovaVenda = existiaAntes.length === 0;
+
     if (payload.product?.id) {
       await db.insert(products)
         .values({ id: payload.product.id, name: payload.product.title ?? payload.product.id })
@@ -141,12 +155,21 @@ export async function POST(req: NextRequest) {
     // without this check, every redelivery would trigger a fresh real Meta CAPI call.
     if (PAID_EVENTS.has(payload.event) && saved && saved.capiStatus !== "sent") {
       void sendPurchaseEvent(saved);
-      // Same redelivery guard as CAPI above — fire the push once per sale, not on every
-      // GGCheckout retry of the same pix.paid/card.paid event.
+      // Same redelivery guard as CAPI above — fire once por sale, não a cada retry do
+      // GGCheckout do mesmo pix.paid/card.paid. Tag única (id + evento) pra empilhar com a
+      // notificação de "gerado" em vez de substituí-la.
       void notifySale({
-        title: "Venda confirmada 🎉",
-        body: `${payload.product?.title ?? "Produto"} — R$ ${Number(payload.payment?.amount ?? 0).toFixed(2).replace(".", ",")}`,
-        amount: Number(payload.payment?.amount ?? 0),
+        title: "Venda aprovada!",
+        body: formatarValor(payload.payment?.amount),
+        tag: `${paymentId}-${payload.event}`,
+      });
+    } else if (payload.event.endsWith(".generated") && eraNovaVenda) {
+      // Idem, mas pro estágio "gerado" (checkout/Pix criado, ainda não pago) — só na
+      // primeira vez que essa venda aparece, pra redelivery do mesmo evento não duplicar.
+      void notifySale({
+        title: `${rotuloMetodo(payload.event)} gerado!`,
+        body: formatarValor(payload.payment?.amount),
+        tag: `${paymentId}-${payload.event}`,
       });
     }
 

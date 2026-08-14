@@ -9,25 +9,31 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-// Short two-tone chime via Web Audio — no audio asset to source/license/ship for a sound
-// that plays maybe a few times a day.
+// Som tipo caixa registradora ("cha-ching") via Web Audio — sem asset pra licenciar/enviar
+// pra um som que toca poucas vezes por dia. Golpe metálico + moedas caindo em sequência,
+// no padrão usado por Hotmart/Kiwify/Utmify pra alerta de venda.
 function tocarSom() {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
-  const tocarNota = (freq: number, inicio: number, duracao: number) => {
+  const tocarNota = (freq: number, inicio: number, duracao: number, tipo: OscillatorType, pico: number) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = "sine";
+    osc.type = tipo;
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0, ctx.currentTime + inicio);
-    gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + inicio + 0.02);
+    gain.gain.linearRampToValueAtTime(pico, ctx.currentTime + inicio + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + inicio + duracao);
     osc.connect(gain).connect(ctx.destination);
     osc.start(ctx.currentTime + inicio);
     osc.stop(ctx.currentTime + inicio + duracao);
   };
-  tocarNota(880, 0, 0.18);
-  tocarNota(1318.5, 0.12, 0.25);
+  // Impacto metálico ("cha")
+  tocarNota(2400, 0, 0.1, "triangle", 0.2);
+  tocarNota(3600, 0, 0.08, "triangle", 0.14);
+  // Moedas caindo ("ching-ching-ching")
+  [1800, 2200, 2600, 3000].forEach((freq, i) => {
+    tocarNota(freq, 0.08 + i * 0.05, 0.09, "triangle", 0.18);
+  });
 }
 
 type Estado = "indisponivel" | "negado" | "inativo" | "ativo" | "carregando";
@@ -84,10 +90,12 @@ export function Notificacoes({ vapidPublicKey }: { vapidPublicKey: string }) {
     tocarSom();
     if (Notification.permission === "granted" && "serviceWorker" in navigator) {
       const reg = await navigator.serviceWorker.ready;
-      reg.showNotification("Venda confirmada 🎉", {
-        body: "Produto de teste — R$ 97,00",
+      // Tag única por clique — mesma tag faz o navegador substituir a notificação anterior
+      // em vez de empilhar, e o teste precisa provar que vendas seguidas empilham.
+      reg.showNotification("Venda aprovada!", {
+        body: "Valor: R$ 97,00",
         icon: "/icons/icon-192.png",
-        tag: "flux-track-teste",
+        tag: `flux-track-teste-${Date.now()}`,
       });
     }
   }
