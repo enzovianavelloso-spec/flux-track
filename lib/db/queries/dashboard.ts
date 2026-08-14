@@ -85,12 +85,12 @@ function saleCondsAnyStatus(f: DashboardFilters) {
 }
 
 // Single-pass GROUP BY per metric — cheap at personal-project volume (plan.md § Schema Postgres).
+// Every query below is independent (no data dependency between them) — they all run in one
+// Promise.all instead of sequential awaits. Sequential round trips to Neon (serverless,
+// cold-start prone, see lib/db/client.ts) were the main source of pages feeling like they
+// "froze" on navigation; this cuts a page load from ~14 serial round trips to one concurrent
+// batch (the pg pool queues past its 10-connection max, it doesn't error).
 export async function getDashboard(f: DashboardFilters): Promise<DashboardResult> {
-  const revenueRow = await db.select({ total: sql<string>`coalesce(sum(${sales.amount}), 0)` })
-    .from(sales)
-    .where(and(...saleConds(f)));
-  const netRevenue = Number(revenueRow[0]?.total ?? 0);
-
   const spendConds = [];
   if (f.from) spendConds.push(gte(adSpendSnapshots.date, f.from));
   if (f.to) spendConds.push(lte(adSpendSnapshots.date, f.to));
@@ -100,13 +100,6 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
     spendConds.push(sql`${adSpendSnapshots.campaignId} in (select ${campaigns.id} from ${campaigns} where ${campaigns.name} = ${f.campaign})`);
   }
   const adSpendCaveat = Boolean(f.platform || f.productId);
-  const spendRow = await db.select({ total: sql<string>`coalesce(sum(${adSpendSnapshots.spend}), 0)` })
-    .from(adSpendSnapshots)
-    .where(spendConds.length ? and(...spendConds) : undefined);
-  const adSpend = Number(spendRow[0]?.total ?? 0);
-
-  const roas = adSpend > 0 ? netRevenue / adSpend : null;
-  const profit = netRevenue - adSpend;
 
   // funnel: click -> generated (sale row exists, any status) -> paid
   const clickConds = [];
@@ -114,12 +107,7 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   if (f.to) clickConds.push(sql`(${clicks.createdAt} at time zone ${TZ})::date <= ${f.to}::date`);
   if (f.campaign) clickConds.push(eq(clicks.metaCampaignName, f.campaign));
   if (f.platform) clickConds.push(eq(clicks.platform, f.platform));
-  const clickCountRow = await db.select({ n: sql<number>`count(*)` }).from(clicks)
-    .where(clickConds.length ? and(...clickConds) : undefined);
   const generatedConds = saleConds(f, false);
-  const generatedRow = await db.select({ n: sql<number>`count(*)` }).from(sales)
-    .where(generatedConds.length ? and(...generatedConds) : undefined);
-  const paidRow = await db.select({ n: sql<number>`count(*)` }).from(sales).where(and(...saleConds(f)));
 
   // Sparkline: same filters as the rest of the panel (campaign/platform/product), same
   // 14-day window ONLY as a fallback when the user hasn't picked a date range — otherwise
@@ -136,9 +124,16 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   const sourceConds = saleConds(f);
 
   const [
+    revenueRow, spendRow, clickCountRow, generatedRow, paidRow,
     productRows, campaignRows, platformRows, dailyRevenueRows,
     paymentBreakdownRows, statusBreakdownRows, approvalRows, productBreakdownRows, sourceBreakdownRows,
   ] = await Promise.all([
+    db.select({ total: sql<string>`coalesce(sum(${sales.amount}), 0)` }).from(sales).where(and(...saleConds(f))),
+    db.select({ total: sql<string>`coalesce(sum(${adSpendSnapshots.spend}), 0)` }).from(adSpendSnapshots)
+      .where(spendConds.length ? and(...spendConds) : undefined),
+    db.select({ n: sql<number>`count(*)` }).from(clicks).where(clickConds.length ? and(...clickConds) : undefined),
+    db.select({ n: sql<number>`count(*)` }).from(sales).where(generatedConds.length ? and(...generatedConds) : undefined),
+    db.select({ n: sql<number>`count(*)` }).from(sales).where(and(...saleConds(f))),
     db.select({ id: products.id, name: products.name }).from(products),
     db.selectDistinct({ v: clicks.metaCampaignName }).from(clicks),
     db.selectDistinct({ v: clicks.platform }).from(clicks),
@@ -180,6 +175,11 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
       .where(and(...sourceConds)).groupBy(clicks.platform)
       .orderBy(sql`sum(${sales.amount}) desc`),
   ]);
+
+  const netRevenue = Number(revenueRow[0]?.total ?? 0);
+  const adSpend = Number(spendRow[0]?.total ?? 0);
+  const roas = adSpend > 0 ? netRevenue / adSpend : null;
+  const profit = netRevenue - adSpend;
 
   const totalSalesCount = statusBreakdownRows.reduce((n, r) => n + Number(r.count), 0);
   const chargedBackCount = Number(statusBreakdownRows.find((r) => r.status === "charged_back")?.count ?? 0);

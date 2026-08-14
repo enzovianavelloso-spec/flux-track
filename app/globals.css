@@ -1,60 +1,39 @@
 /*
  * Flux Track — sistema de design
- * Estilo: Glass escuro fluido — vidro fosco sobre blobs ambientes, glow semântico nas
- * métricas, cascata + count-up orquestrados via GSAP (app/anima.tsx). Base "Modern Dark
- * (Cinema)" + Glassmorphism, pesquisadas via ui-ux-pro-max. Fundo nunca preto puro (OLED
- * smear); verde/vermelho continuam a semântica financeira de lucro/prejuízo — a paleta
- * "trend" da skill sugeria indigo/roxo como cor de resultado, mas isso quebraria a leitura
- * de "ganhei ou perdi dinheiro" num produto financeiro brasileiro. Indigo vira cor de marca.
+ * Estilo: flat dark fintech (referência: Utmify) — superfícies sólidas, sem vidro/blur/glow,
+ * sem blob ambiente. Contraste e hierarquia vêm de cor/peso, não de efeito. Fundo nunca
+ * preto puro (OLED smear). Verde/vermelho seguem a semântica financeira de lucro/prejuízo;
+ * azul é a cor de marca/interação.
  */
 
 :root {
   /* ---- Superfícies ---- */
-  --fundo: #020617;
-  --fundo-alto: #070c1a;   /* barra fixa do topo */
-  --cartao: #0e1223;       /* fallback sólido — ver @supports abaixo */
-  --cartao-hover: #131834;
-  --suave: #1a1e2f;        /* fundo de campo, badge neutro, trilho de barra */
-  --borda: #232a42;
-  --borda-forte: #334155;
-
-  /* Glass: vidro escuro translúcido, não branco — branco a 10% sobre um blob colorido
-     derruba o contraste do texto abaixo de 4,5:1 nos cantos mais claros do blob.
-     Escurecer o próprio vidro garante contraste independente do que está atrás. */
-  --vidro: rgba(8, 11, 24, 0.62);
-  --vidro-alto: rgba(13, 17, 34, 0.74);
-  --vidro-borda: rgba(255, 255, 255, 0.09);
-  --vidro-borda-forte: rgba(255, 255, 255, 0.18);
-  --desfoque: 18px;
+  --fundo: #0a0e17;
+  --fundo-alto: #0f1420;  /* barra fixa do topo */
+  --cartao: #131824;
+  --cartao-hover: #171d2c;
+  --suave: #1a2030;       /* fundo de campo, badge neutro, trilho de barra */
+  --borda: #232938;
+  --borda-forte: #313a4f;
 
   /* ---- Texto ---- */
-  --texto: #f8fafc;
-  --texto-suave: #94a3b8;  /* 7,2:1 sobre --cartao */
-  --texto-fraco: #78899f;  /* 5,2:1 sobre --cartao — carrega informação real, não decoração */
+  --texto: #f1f5f9;
+  --texto-suave: #97a3b8;
+  --texto-fraco: #6b7688;
 
   /* ---- Semântica ---- */
   --positivo: #22c55e;
   --positivo-fundo: rgba(34, 197, 94, 0.12);
   --negativo: #ef4444;
   --negativo-fundo: rgba(239, 68, 68, 0.12);
-  /* Vermelho mais claro só pro texto do selo: subir a opacidade do fundo pra ganhar
-     contraste piora — texto e fundo são o mesmo vermelho, então fundo mais opaco
-     aproxima a luminância do fundo da do texto (4,14:1 -> 3,65:1, na direção errada).
-     Clarear só o texto do badge resolve sem mexer no fundo nem no --negativo usado
-     em valores grandes (lucro/prejuízo), que já passa AA-large com folga. */
-  --negativo-selo: #fca5a5;
+  --negativo-selo: #fca5a5; /* vermelho mais claro só pro texto do selo — contraste sobre --negativo-fundo */
   --atencao: #f59e0b;
   --atencao-fundo: rgba(245, 158, 11, 0.12);
 
-  /* Marca/interação — indigo sólido, nunca gradiente roxo→rosa (anti-padrão do próprio
-     estilo pesquisado: lê como IA genérica, não como fintech). */
-  --marca: #818cf8;
-  --marca-forte: #6366f1;
-  --marca-fundo: rgba(129, 140, 248, 0.14);
-
-  --brilho-positivo: 0 0 28px rgba(34, 197, 94, 0.32);
-  --brilho-negativo: 0 0 28px rgba(239, 68, 68, 0.28);
-  --brilho-marca: 0 0 28px rgba(129, 140, 248, 0.28);
+  /* Marca/interação — azul sólido, mesma família de cor usada pra destaque na referência. */
+  --marca: #3b82f6;
+  --marca-forte: #2563eb;
+  --marca-fundo: rgba(59, 130, 246, 0.14);
 
   /* ---- Espaçamento (escala densa 4/8) ---- */
   --e1: 4px;
@@ -65,17 +44,15 @@
   --e6: 32px;
   --e7: 48px;
 
-  --raio: 14px;
+  --raio: 12px;
   --raio-p: 8px;
   --raio-pill: 999px;
 
   --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sombra-alta: 0 20px 48px rgba(0, 0, 0, 0.5);
 
   /* ---- Movimento ---- */
   --rapido: 150ms;
   --medio: 240ms;
-  --lento: 600ms;         /* tier "Complex" da pesquisa gsap — cascata de entrada */
   --saida: cubic-bezier(0.16, 1, 0.3, 1); /* expo.out */
 }
 
@@ -93,15 +70,13 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  overflow-x: clip; /* os blobs saem um pouco da viewport de propósito, nunca geram scroll */
+  overflow-x: clip;
 }
 
-h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sans-serif; }
-
 /* Todo número alinhado em coluna: figuras tabulares impedem que o valor "pule"
-   de largura ao atualizar (regra number-tabular da ui-ux-pro-max). */
+   de largura ao atualizar (regra number-tabular). Mesma fonte da interface, só o
+   variant numérico muda — números monoespaçados destoavam da referência. */
 .num {
-  font-family: var(--fonte-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -111,68 +86,6 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
   outline: 2px solid var(--marca);
   outline-offset: 2px;
   border-radius: var(--raio-p);
-}
-
-/* ---------- Blobs ambientes ----------
-   Fixed, atrás de tudo, nunca capturam clique. CSS puro: são só transform oscilando bem
-   devagar (30-45s) — não precisam de GSAP, e um JS orquestrando isso seria trabalho extra
-   pra um resultado que @keyframes já entrega de graça. */
-.ambiente {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.55;
-  will-change: transform;
-}
-
-.blob-1 {
-  width: 46vw; height: 46vw;
-  top: -12vw; left: -8vw;
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.22), transparent 70%);
-  animation: deriva-1 34s ease-in-out infinite;
-}
-
-.blob-2 {
-  width: 40vw; height: 40vw;
-  bottom: -14vw; right: -6vw;
-  background: radial-gradient(circle, rgba(34, 197, 94, 0.16), transparent 70%);
-  animation: deriva-2 41s ease-in-out infinite;
-}
-
-.blob-3 {
-  width: 30vw; height: 30vw;
-  top: 30vh; right: 12vw;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.14), transparent 70%);
-  animation: deriva-3 38s ease-in-out infinite;
-}
-
-@keyframes deriva-1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(6vw, 8vh) scale(1.12); }
-}
-@keyframes deriva-2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-7vw, -6vh) scale(1.08); }
-}
-@keyframes deriva-3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-5vw, 5vh) scale(0.9); }
-}
-
-/* Blobs somem em tela pequena e sob movimento reduzido: em telas pequenas o filter:blur
-   de elementos grandes é o tipo de trabalho que mais pesa no compositor de aparelhos
-   fracos, e é o efeito que menos se nota numa tela de 375px de largura. */
-@media (max-width: 640px), (prefers-reduced-motion: reduce) {
-  .blob { animation: none; }
-  .blob-3 { display: none; }
 }
 
 /* ---------- Estrutura ---------- */
@@ -191,10 +104,8 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
   position: sticky;
   top: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--fundo-alto) 70%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--vidro-borda);
+  background: var(--fundo-alto);
+  border-bottom: 1px solid var(--borda);
 }
 
 .topo-interno {
@@ -219,7 +130,6 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
   letter-spacing: -0.01em;
   color: var(--texto);
   text-decoration: none;
-  font-family: var(--fonte-display), var(--fonte-ui), sans-serif;
 }
 
 .marca svg { display: block; }
@@ -317,11 +227,9 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
   gap: var(--e2);
   padding: var(--e2) var(--e3);
   min-height: 34px;
-  background: var(--vidro);
-  backdrop-filter: blur(var(--desfoque));
-  -webkit-backdrop-filter: blur(var(--desfoque));
-  border: 1px solid var(--vidro-borda);
-  border-radius: var(--raio-pill);
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-p);
   color: var(--texto-suave);
   font-size: 13px;
   font-weight: 500;
@@ -331,8 +239,8 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
 }
 
 .pill:hover {
-  background: var(--vidro-alto);
-  border-color: var(--vidro-borda-forte);
+  background: var(--cartao-hover);
+  border-color: var(--borda-forte);
   color: var(--texto);
 }
 
@@ -345,11 +253,9 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
 }
 
 .campo {
-  background: var(--vidro);
-  backdrop-filter: blur(var(--desfoque));
-  -webkit-backdrop-filter: blur(var(--desfoque));
+  background: var(--cartao);
   color: var(--texto);
-  border: 1px solid var(--vidro-borda);
+  border: 1px solid var(--borda);
   border-radius: var(--raio-p);
   padding: var(--e2) var(--e3);
   min-height: 36px;
@@ -358,7 +264,7 @@ h1, .metrica-valor-hero { font-family: var(--fonte-display), var(--fonte-ui), sa
   transition: border-color var(--rapido);
 }
 
-.campo:hover { border-color: var(--vidro-borda-forte); }
+.campo:hover { border-color: var(--borda-forte); }
 
 /* O ícone nativo de calendário nasce preto e some no fundo escuro */
 input[type="date"].campo::-webkit-calendar-picker-indicator {
@@ -368,7 +274,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 
 .botao {
   background: var(--marca-forte);
-  color: #f5f5ff;
+  color: #f8fafc;
   border: 1px solid transparent;
   border-radius: var(--raio-p);
   padding: var(--e2) var(--e4);
@@ -377,7 +283,6 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  box-shadow: var(--brilho-marca);
   transition: filter var(--rapido), transform var(--rapido);
 }
 
@@ -409,32 +314,23 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 
 .cartao {
   position: relative;
-  background: var(--vidro);
-  backdrop-filter: blur(var(--desfoque));
-  -webkit-backdrop-filter: blur(var(--desfoque));
-  border: 1px solid var(--vidro-borda);
+  background: var(--cartao);
+  border: 1px solid var(--borda);
   border-radius: var(--raio);
   padding: var(--e4);
   box-shadow: var(--sombra);
-  transition: border-color var(--rapido), background var(--rapido), transform var(--rapido);
-}
-
-/* Navegador sem suporte a backdrop-filter: vidro translúcido sobre blob viraria ilegível.
-   Cai pro cartão sólido — mesmo visual do redesign anterior, só como piso de segurança. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .cartao, .pill, .campo, .topo {
-    background: var(--cartao);
-  }
+  transition: border-color var(--rapido), background var(--rapido);
 }
 
 .cartao-metrica:hover {
-  border-color: var(--vidro-borda-forte);
-  background: var(--vidro-alto);
+  border-color: var(--borda-forte);
+  background: var(--cartao-hover);
 }
 
 .cartao-hero {
-  background: linear-gradient(155deg, var(--vidro-alto), var(--vidro));
-  border-color: var(--vidro-borda-forte);
+  background: var(--cartao);
+  border-color: var(--marca-fundo);
+  border-left: 3px solid var(--marca);
 }
 
 @media (min-width: 900px) {
@@ -469,6 +365,18 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   font-size: 12px;
   color: var(--texto-fraco);
   margin-top: var(--e1);
+}
+
+/* ---------- Esqueleto de carregamento (app/loading.tsx, app/admin/loading.tsx) ---------- */
+.esqueleto {
+  min-height: 96px;
+  background: linear-gradient(90deg, var(--cartao) 0%, var(--cartao-hover) 50%, var(--cartao) 100%);
+  background-size: 200% 100%;
+  animation: pulsa-esqueleto 1.4s ease-in-out infinite;
+}
+@keyframes pulsa-esqueleto {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ---------- Selo de status ---------- */
@@ -550,7 +458,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   text-transform: uppercase;
   color: var(--texto-fraco);
   padding: var(--e2) var(--e3);
-  border-bottom: 1px solid var(--vidro-borda);
+  border-bottom: 1px solid var(--borda);
 }
 
 /* :where() zera a especificidade da cor padrão — sem isso, ".tabela td" (0,1,1) vence
@@ -570,9 +478,9 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 .tabela tbody tr:last-child td { border-bottom: none; }
 
 .id-curto {
-  font-family: var(--fonte-mono), ui-monospace, monospace;
   font-size: 12px;
   color: var(--texto-suave);
+  font-variant-numeric: tabular-nums;
 }
 
 .sem-dado {
@@ -585,9 +493,9 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
    contagem do "td") é resolvida por ORDEM no arquivo: como estas regras vêm depois,
    vencem dentro de <td> mesmo sem serem mais específicas. Precisa continuar depois do
    bloco ".tabela" — testado ao vivo: definidas antes, o texto de erro saía branco. */
-.positivo { color: var(--positivo); text-shadow: var(--brilho-positivo); }
-.negativo { color: var(--negativo); text-shadow: var(--brilho-negativo); }
-.vazio { color: var(--texto-fraco); text-shadow: none; }
+.positivo { color: var(--positivo); }
+.negativo { color: var(--negativo); }
+.vazio { color: var(--texto-fraco); }
 
 /* ---------- Ícone de info + tooltip (generaliza .grafico-tooltip pra qualquer cartão) ---------- */
 .info-icone {
@@ -603,7 +511,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   left: 50%;
   transform: translateX(-50%);
   background: var(--fundo-alto);
-  border: 1px solid var(--vidro-borda-forte);
+  border: 1px solid var(--borda-forte);
   border-radius: var(--raio-p);
   padding: var(--e2) var(--e3);
   font-size: 11px;
@@ -647,7 +555,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 
 /* ---------- Donut (Vendas por Pagamento) ---------- */
 .grafico-donut-wrap { display: flex; align-items: center; gap: var(--e4); flex-wrap: wrap; }
-.donut-total-num { fill: var(--texto); font-size: 22px; font-weight: 600; font-family: var(--fonte-display); }
+.donut-total-num { fill: var(--texto); font-size: 22px; font-weight: 600; }
 .donut-total-rotulo { fill: var(--texto-fraco); font-size: 10px; }
 .donut-fatia {
   animation: desenha 900ms var(--saida) both;
@@ -700,7 +608,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 
 /* ---------- Gráfico ---------- */
 .grafico { width: 100%; height: auto; display: block; overflow: visible; }
-.grafico-grade { stroke: var(--vidro-borda-forte); stroke-width: 1; }
+.grafico-grade { stroke: var(--borda); stroke-width: 1; }
 .grafico-eixo { fill: var(--texto-fraco); font-size: 10px; }
 .grafico-teto { fill: var(--texto-fraco); font-size: 10px; }
 
@@ -742,13 +650,13 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 
 .grafico-tooltip rect {
   fill: var(--fundo-alto);
-  stroke: var(--vidro-borda-forte);
+  stroke: var(--borda-forte);
 }
 
 .grafico-tooltip text {
   fill: var(--texto);
   font-size: 11px;
-  font-family: var(--fonte-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Animações compartilhadas (CSS puro: traço do gráfico e barra do funil) ----------
@@ -772,7 +680,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 
 /* Movimento reduzido: tudo aparece no estado final, sem transição.
    Obrigatório — animação não pode ser condição pra ver a informação. GSAP respeita a mesma
-   preferência via gsap.matchMedia() em app/anima.tsx; isto cobre o que ainda é CSS puro. */
+   preferência via matchMedia direto em app/anima.tsx; isto cobre o que ainda é CSS puro. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
