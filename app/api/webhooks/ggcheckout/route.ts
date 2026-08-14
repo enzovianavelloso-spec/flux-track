@@ -64,11 +64,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
 
+  // pix.paid nests UTM/click params under `params`; pix.generated puts the same fields on the
+  // payload root instead. Check both so neither event shape loses attribution data.
+  const utm = (key: "utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term") =>
+    payload.params?.[key] ?? payload[key] ?? null;
+
   try {
+    const paymentId = payload.payment?.id;
     // GGCheckout dispara um POST de teste (sem payment.id real) ao salvar/testar o webhook no
     // painel — não é venda, só valida que a URL responde. Sem id não há o que gravar em `sales`
     // (PK not-null), mas ainda é sucesso: o teste só quer 200 de volta.
-    if (!payload.id) {
+    if (!paymentId) {
       await logWebhook({ validated: true, processed: true, headers, payload, durationMs: Date.now() - startedAt });
       return NextResponse.json({ ok: true });
     }
@@ -82,28 +88,29 @@ export async function POST(req: NextRequest) {
     // clickid recovery: utm_content carries the bare clickid if the LP round-trip worked.
     // Present but no matching click row, or absent entirely -> clickid stays NULL, sale still saved.
     let matchedClickId: string | null = null;
-    if (payload.utm_content) {
-      const found = await db.select({ id: clicks.id }).from(clicks).where(eq(clicks.id, payload.utm_content)).limit(1);
+    const utmContent = utm("utm_content");
+    if (utmContent) {
+      const found = await db.select({ id: clicks.id }).from(clicks).where(eq(clicks.id, utmContent)).limit(1);
       if (found.length) matchedClickId = found[0].id;
     }
 
     const [saved] = await db.insert(sales).values({
-      id: payload.id,
+      id: paymentId,
       event: payload.event,
-      status: payload.status,
-      amount: payload.amount != null ? String(payload.amount) : null,
-      paymentMethod: payload.paymentMethod ?? payload.method,
-      gateway: payload.gateway,
+      status: payload.payment?.status,
+      amount: payload.payment?.amount != null ? String(payload.payment.amount) : null,
+      paymentMethod: payload.payment?.paymentMethod ?? payload.payment?.method,
+      gateway: payload.payment?.gateway,
       productId: payload.product?.id,
-      customerEmail: payload.email,
-      customerName: payload.name,
-      customerDocument: payload.document,
-      customerPhone: payload.phone,
-      utmSource: payload.utm_source,
-      utmMedium: payload.utm_medium,
-      utmCampaign: payload.utm_campaign,
-      utmContent: payload.utm_content,
-      utmTerm: payload.utm_term,
+      customerEmail: payload.customer?.email,
+      customerName: payload.customer?.name,
+      customerDocument: payload.customer?.document,
+      customerPhone: payload.customer?.phone,
+      utmSource: utm("utm_source"),
+      utmMedium: utm("utm_medium"),
+      utmCampaign: utm("utm_campaign"),
+      utmContent,
+      utmTerm: utm("utm_term"),
       clickid: matchedClickId,
       matched: matchedClickId !== null,
       capiStatus: PAID_EVENTS.has(payload.event) ? "pending" : "not_applicable",
@@ -112,7 +119,7 @@ export async function POST(req: NextRequest) {
       target: sales.id,
       set: {
         event: payload.event,
-        status: payload.status,
+        status: payload.payment?.status,
         matched: matchedClickId !== null,
         clickid: matchedClickId ?? sql`sales.clickid`, // keep prior match if this update has none
         rawPayload: payload,
