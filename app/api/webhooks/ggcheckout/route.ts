@@ -5,6 +5,7 @@ import { clicks, products, sales, webhookLogs } from "@/lib/db/schema";
 import { verifyWebhookSecret } from "@/lib/ggcheckout/webhook-verify";
 import type { GgCheckoutWebhookPayload } from "@/lib/ggcheckout/payload-types";
 import { sendPurchaseEvent } from "@/lib/meta/capi";
+import { notifySale } from "@/lib/push/send";
 
 const PAID_EVENTS = new Set(["pix.paid", "card.paid"]);
 const REDACT_HEADERS = new Set(["x-secret", "authorization"]);
@@ -140,6 +141,13 @@ export async function POST(req: NextRequest) {
     // without this check, every redelivery would trigger a fresh real Meta CAPI call.
     if (PAID_EVENTS.has(payload.event) && saved && saved.capiStatus !== "sent") {
       void sendPurchaseEvent(saved);
+      // Same redelivery guard as CAPI above — fire the push once per sale, not on every
+      // GGCheckout retry of the same pix.paid/card.paid event.
+      void notifySale({
+        title: "Venda confirmada 🎉",
+        body: `${payload.product?.title ?? "Produto"} — R$ ${Number(payload.payment?.amount ?? 0).toFixed(2).replace(".", ",")}`,
+        amount: Number(payload.payment?.amount ?? 0),
+      });
     }
 
     return NextResponse.json({ ok: true });
