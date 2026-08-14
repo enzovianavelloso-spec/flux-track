@@ -101,6 +101,14 @@ export const webhookLogs = pgTable("webhook_logs", {
   index("webhook_logs_processed_idx").on(t.processed),
 ]);
 
+// One row per browser/device subscribed to sale push notifications. Single-user app —
+// no owner column needed, just every endpoint that ever granted permission.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  endpoint: text("endpoint").primaryKey(),
+  keys: jsonb("keys").notNull(), // { p256dh, auth } — required by the Web Push encryption spec
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
 export const adSpendSnapshots = pgTable("ad_spend_snapshots", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   date: date("date").notNull(),
