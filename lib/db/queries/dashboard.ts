@@ -107,6 +107,7 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   if (f.to) clickConds.push(sql`(${clicks.createdAt} at time zone ${TZ})::date <= ${f.to}::date`);
   if (f.campaign) clickConds.push(eq(clicks.metaCampaignName, f.campaign));
   if (f.platform) clickConds.push(eq(clicks.platform, f.platform));
+  const generatedConds = saleConds(f, false);
 
   // Sparkline: same filters as the rest of the panel (campaign/platform/product), same
   // 14-day window ONLY as a fallback when the user hasn't picked a date range — otherwise
@@ -118,25 +119,21 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   if (!f.from && !f.to) dailyConds.push(sql`${sales.receivedAt} >= now() - interval '14 days'`);
 
   const statusBreakdownConds = saleCondsAnyStatus(f);
+  const approvalConds = [...saleCondsAnyStatus(f), sql`${sales.status} in ('paid', 'failed')`];
   const productConds = saleConds(f);
   const sourceConds = saleConds(f);
 
-  // revenueRow/generatedRow/paidRow/paymentBreakdown/statusBreakdown/approvalRows were
-  // 6 separate queries all scanning `sales` with the same base filter, differing only in
-  // which status they cared about — merged into one (method, status) grouped scan, then
-  // sliced every which way in JS below. Fewer concurrent connections opened per page load
-  // matters more than usual here: Neon's compute can be suspended between requests, and a
-  // page firing a dozen-plus simultaneous connection attempts at a cold compute is exactly
-  // the shape that produces intermittent "Connection terminated"/timeout errors — this was
-  // the actual cause of the site occasionally freezing on navigation, not a slow query.
   const [
-    spendRow, clickCountRow,
+    revenueRow, spendRow, clickCountRow, generatedRow, paidRow,
     productRows, campaignRows, platformRows, dailyRevenueRows,
-    methodStatusRows, productBreakdownRows, sourceBreakdownRows,
+    paymentBreakdownRows, statusBreakdownRows, approvalRows, productBreakdownRows, sourceBreakdownRows,
   ] = await Promise.all([
+    db.select({ total: sql<string>`coalesce(sum(${sales.amount}), 0)` }).from(sales).where(and(...saleConds(f))),
     db.select({ total: sql<string>`coalesce(sum(${adSpendSnapshots.spend}), 0)` }).from(adSpendSnapshots)
       .where(spendConds.length ? and(...spendConds) : undefined),
     db.select({ n: sql<number>`count(*)` }).from(clicks).where(clickConds.length ? and(...clickConds) : undefined),
+    db.select({ n: sql<number>`count(*)` }).from(sales).where(generatedConds.length ? and(...generatedConds) : undefined),
+    db.select({ n: sql<number>`count(*)` }).from(sales).where(and(...saleConds(f))),
     db.select({ id: products.id, name: products.name }).from(products),
     db.selectDistinct({ v: clicks.metaCampaignName }).from(clicks),
     db.selectDistinct({ v: clicks.platform }).from(clicks),
@@ -149,11 +146,19 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
       .orderBy(sql`(${sales.receivedAt} at time zone ${TZ})::date`),
     db.select({
       method: sql<string>`coalesce(${sales.paymentMethod}, 'outros')`,
+      count: sql<number>`count(*)`,
+      revenue: sql<string>`coalesce(sum(${sales.amount}), 0)`,
+    }).from(sales).where(and(...saleConds(f))).groupBy(sql`coalesce(${sales.paymentMethod}, 'outros')`),
+    db.select({
       status: sales.status,
       count: sql<number>`count(*)`,
       revenue: sql<string>`coalesce(sum(${sales.amount}), 0)`,
-    }).from(sales).where(statusBreakdownConds.length ? and(...statusBreakdownConds) : undefined)
-      .groupBy(sql`coalesce(${sales.paymentMethod}, 'outros')`, sales.status),
+    }).from(sales).where(statusBreakdownConds.length ? and(...statusBreakdownConds) : undefined).groupBy(sales.status),
+    db.select({
+      method: sql<string>`coalesce(${sales.paymentMethod}, 'outros')`,
+      status: sales.status,
+      count: sql<number>`count(*)`,
+    }).from(sales).where(and(...approvalConds)).groupBy(sql`coalesce(${sales.paymentMethod}, 'outros')`, sales.status),
     db.select({
       productId: sales.productId,
       name: products.name,
@@ -171,29 +176,22 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
       .orderBy(sql`sum(${sales.amount}) desc`),
   ]);
 
+  const netRevenue = Number(revenueRow[0]?.total ?? 0);
   const adSpend = Number(spendRow[0]?.total ?? 0);
-
-  const paidRows = methodStatusRows.filter((r) => r.status === "paid");
-  const netRevenue = paidRows.reduce((n, r) => n + Number(r.revenue), 0);
   const roas = adSpend > 0 ? netRevenue / adSpend : null;
   const profit = netRevenue - adSpend;
 
-  const totalSalesCount = methodStatusRows.reduce((n, r) => n + Number(r.count), 0);
-  const paidCount = paidRows.reduce((n, r) => n + Number(r.count), 0);
-  const generatedCount = totalSalesCount; // any status counts as "generated" — same definition as before
-  const chargedBackCount = methodStatusRows.filter((r) => r.status === "charged_back").reduce((n, r) => n + Number(r.count), 0);
-  const pendingRevenue = methodStatusRows.filter((r) => r.status === "pending").reduce((n, r) => n + Number(r.revenue), 0);
-  const refundedRevenue = methodStatusRows.filter((r) => r.status === "refunded").reduce((n, r) => n + Number(r.revenue), 0);
+  const totalSalesCount = statusBreakdownRows.reduce((n, r) => n + Number(r.count), 0);
+  const chargedBackCount = Number(statusBreakdownRows.find((r) => r.status === "charged_back")?.count ?? 0);
+  const pendingRevenue = Number(statusBreakdownRows.find((r) => r.status === "pending")?.revenue ?? 0);
+  const refundedRevenue = Number(statusBreakdownRows.find((r) => r.status === "refunded")?.revenue ?? 0);
   const chargebackRate = totalSalesCount > 0 ? chargedBackCount / totalSalesCount : null;
 
-  const paymentBreakdown = paidRows.map((r) => ({ method: r.method, count: Number(r.count), revenue: Number(r.revenue) }));
-
   const approvalByMethod = new Map<string, { paid: number; failed: number }>();
-  for (const row of methodStatusRows) {
-    if (row.status !== "paid" && row.status !== "failed") continue;
+  for (const row of approvalRows) {
     const entry = approvalByMethod.get(row.method) ?? { paid: 0, failed: 0 };
     if (row.status === "paid") entry.paid += Number(row.count);
-    else entry.failed += Number(row.count);
+    else if (row.status === "failed") entry.failed += Number(row.count);
     approvalByMethod.set(row.method, entry);
   }
   const approvalRates = Array.from(approvalByMethod.entries()).map(([method, { paid, failed }]) => ({
@@ -202,6 +200,7 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   }));
 
   const clicksCount = Number(clickCountRow[0]?.n ?? 0);
+  const paidCount = Number(paidRow[0]?.n ?? 0);
 
   return {
     netRevenue,
@@ -211,7 +210,7 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
     epc: clicksCount > 0 ? netRevenue / clicksCount : null,
     cpa: paidCount > 0 ? adSpend / paidCount : null,
     conversionRate: clicksCount > 0 ? paidCount / clicksCount : null,
-    funnel: { clicks: clicksCount, generated: generatedCount, paid: paidCount },
+    funnel: { clicks: clicksCount, generated: Number(generatedRow[0]?.n ?? 0), paid: paidCount },
     dailyRevenue: dailyRevenueRows.map((r) => ({ date: r.date, amount: Number(r.amount) })),
     filterOptions: {
       products: productRows,
@@ -223,7 +222,7 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
     pendingRevenue,
     refundedRevenue,
     chargebackRate,
-    paymentBreakdown,
+    paymentBreakdown: paymentBreakdownRows.map((r) => ({ method: r.method, count: Number(r.count), revenue: Number(r.revenue) })),
     approvalRates,
     productBreakdown: productBreakdownRows
       .filter((r): r is typeof r & { productId: string; name: string } => !!r.productId)

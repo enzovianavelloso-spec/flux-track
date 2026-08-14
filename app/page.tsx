@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { Cabecalho } from "./cabecalho";
 import { Anima } from "./anima";
-import { Notificacoes } from "./notificacoes";
 import { getDashboard, type DashboardFilters } from "@/lib/db/queries/dashboard";
-import { env } from "@/lib/env";
 
 const dinheiro = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const porcento = (n: number) => (n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
@@ -390,9 +388,7 @@ export default async function PainelPage({
             <button type="submit" className="botao">Aplicar</button>
           </form>
 
-          <Notificacoes vapidPublicKey={env.vapidPublicKey} />
-
-          <div className="rotulo-seccao" style={{ marginTop: "var(--e5)" }}>Resultado</div>
+          <div className="rotulo-seccao">Resultado</div>
           <div className="grade grade-4">
             <Metrica
               hero

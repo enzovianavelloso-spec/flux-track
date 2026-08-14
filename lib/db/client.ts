@@ -10,13 +10,7 @@ import * as schema from "./schema";
 // on its end can sit in the local pool looking alive until the next query on them errors.
 const pool = new Pool({
   connectionString: env.databaseUrl,
-  // getDashboard alone fires 14 concurrent queries in one Promise.all — with max:10 the
-  // extra 4 queued for a free connection, and under Neon cold-start that queueing wait
-  // could itself exceed connectionTimeoutMillis, surfacing as an outright page error
-  // instead of just a slower load. DATABASE_URL points at Neon's pooler endpoint
-  // (PgBouncer-style), which comfortably handles more concurrent client connections than
-  // this app ever opens at once — raising the ceiling here is free.
-  max: 20,
+  max: 10,
   idleTimeoutMillis: 30_000,
   // 10s, not 5s: confirmed live against this exact Neon project — the first request after
   // real idle (compute scaled to zero) can take longer than 5s to establish a connection,

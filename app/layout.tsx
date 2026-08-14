@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -14,13 +14,6 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Flux Track",
   description: "Rastreamento de anúncios: do clique à venda confirmada.",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Flux Track" },
-};
-
-export const viewport: Viewport = {
-  themeColor: "#0a0e17",
-  width: "device-width",
-  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

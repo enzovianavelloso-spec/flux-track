@@ -14,10 +14,4 @@ export const env = {
   get metaTestEventCode() { return process.env.META_TEST_EVENT_CODE ?? undefined; },
   get cronSecret() { return required("CRON_SECRET"); },
   get devMode() { return process.env.DEV_MODE === "true"; },
-  // VAPID: private key never leaves the server (used only to sign push payloads via
-  // web-push). Public key is meant to reach the client — passed as a prop from a server
-  // component to the subscribe button, not baked in via NEXT_PUBLIC_ so it stays out of
-  // the JS bundle for pages that don't render the notification UI.
-  get vapidPublicKey() { return required("VAPID_PUBLIC_KEY"); },
-  get vapidPrivateKey() { return required("VAPID_PRIVATE_KEY"); },
 };
