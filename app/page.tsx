@@ -30,8 +30,20 @@ function comFiltros(sp: Record<string, string | undefined>, sobrepor: Record<str
   return qs ? `?${qs}` : "/";
 }
 
+function InfoIcone({ texto }: { texto: string }) {
+  return (
+    <span className="info-icone" tabIndex={0}>
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        <text x="8" y="11.5" textAnchor="middle" fontSize="10" fill="currentColor">i</text>
+      </svg>
+      <span className="info-tooltip" role="tooltip">{texto}</span>
+    </span>
+  );
+}
+
 function Metrica({
-  rotulo, valorNum, valorTexto, formato, nota, cor, hero,
+  rotulo, valorNum, valorTexto, formato, nota, cor, hero, tooltip,
 }: {
   rotulo: string;
   valorNum: number | null;
@@ -40,10 +52,14 @@ function Metrica({
   nota?: string;
   cor?: "positivo" | "negativo";
   hero?: boolean;
+  tooltip?: string;
 }) {
   return (
     <div className={`cartao cartao-metrica ${hero ? "cartao-hero" : ""}`} data-anima>
-      <div className="metrica-rotulo">{rotulo}</div>
+      <div className="metrica-rotulo">
+        {rotulo}
+        {tooltip && <InfoIcone texto={tooltip} />}
+      </div>
       <div
         className={`${hero ? "metrica-valor-hero" : "metrica-valor"} num ${cor ?? ""}`}
         data-num-valor={valorNum === null ? undefined : valorNum}
@@ -189,6 +205,114 @@ function Funil({ funil }: { funil: { clicks: number; generated: number; paid: nu
   );
 }
 
+const CORES_METODO: Record<string, string> = {
+  pix: "var(--positivo)",
+  card: "var(--marca)",
+  cartao: "var(--marca)",
+  boleto: "var(--atencao)",
+};
+
+function rotuloMetodo(metodo: string) {
+  const mapa: Record<string, string> = { pix: "Pix", card: "Cartão", cartao: "Cartão", boleto: "Boleto", outros: "Outros" };
+  return mapa[metodo] ?? metodo.charAt(0).toUpperCase() + metodo.slice(1);
+}
+
+/** Vendas por método de pagamento. Anel SVG à mão, mesma técnica de stroke-dasharray
+ *  do gráfico de linha, uma fatia por método. */
+function GraficoPagamento({ dados }: { dados: { method: string; count: number; revenue: number }[] }) {
+  const total = dados.reduce((n, d) => n + d.count, 0);
+  if (total === 0) {
+    return <p className="sem-dado">Nenhuma venda por aqui.</p>;
+  }
+
+  const raio = 70, cx = 90, cy = 90;
+  const circunferencia = 2 * Math.PI * raio;
+  let acumulado = 0;
+
+  return (
+    <div className="grafico-donut-wrap">
+      <svg viewBox="0 0 180 180" width="180" height="180" role="img" aria-label={`Vendas por método de pagamento, total ${total}`}>
+        <circle cx={cx} cy={cy} r={raio} fill="none" stroke="var(--suave)" strokeWidth="20" />
+        {dados.map((d) => {
+          const fracao = d.count / total;
+          const comprimentoFatia = fracao * circunferencia;
+          const offset = circunferencia - acumulado;
+          acumulado += comprimentoFatia;
+          const cor = CORES_METODO[d.method] ?? "var(--texto-fraco)";
+          return (
+            <circle
+              key={d.method}
+              cx={cx} cy={cy} r={raio} fill="none" stroke={cor} strokeWidth="20"
+              strokeDasharray={`${comprimentoFatia} ${circunferencia - comprimentoFatia}`}
+              strokeDashoffset={offset}
+              transform={`rotate(-90 ${cx} ${cy})`}
+              className="donut-fatia"
+              style={{ "--comprimento": Math.round(comprimentoFatia) } as React.CSSProperties}
+            >
+              <title>{`${rotuloMetodo(d.method)}: ${inteiro(d.count)} (${porcento(fracao)})`}</title>
+            </circle>
+          );
+        })}
+        <text x={cx} y={cy - 4} textAnchor="middle" className="donut-total-num">{total}</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" className="donut-total-rotulo">Total</text>
+      </svg>
+      <ul className="donut-legenda">
+        {dados.map((d) => (
+          <li key={d.method}>
+            <span className="donut-ponto" style={{ background: CORES_METODO[d.method] ?? "var(--texto-fraco)" }} />
+            {rotuloMetodo(d.method)} — {inteiro(d.count)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Taxa de aprovação por método — aro único, reusado 3x (Cartão/Pix/Boleto). */
+function Aro({ rotulo, rate }: { rotulo: string; rate: number | null }) {
+  const raio = 44, circunferencia = 2 * Math.PI * raio;
+  const fracao = rate ?? 0;
+  const offsetFinal = circunferencia * (1 - fracao);
+  return (
+    <div className="aro-item">
+      <svg viewBox="0 0 100 100" width="100" height="100">
+        <circle cx="50" cy="50" r={raio} fill="none" stroke="var(--suave)" strokeWidth="10" />
+        {rate !== null && (
+          <circle
+            cx="50" cy="50" r={raio} fill="none" stroke="var(--marca)" strokeWidth="10"
+            strokeLinecap="round" transform="rotate(-90 50 50)"
+            className="aro-anima"
+            style={{ "--comprimento": circunferencia, "--offset-final": offsetFinal } as React.CSSProperties}
+          />
+        )}
+        <text x="50" y="55" textAnchor="middle" className="aro-valor">{rate === null ? "N/A" : porcento(rate)}</text>
+      </svg>
+      <div className="aro-rotulo">{rotulo}</div>
+    </div>
+  );
+}
+
+function ListaRanking({ itens, vazio }: { itens: { rotulo: string; count: number; revenue: number }[]; vazio: string }) {
+  if (itens.length === 0) {
+    return <p className="sem-dado">{vazio}</p>;
+  }
+  return (
+    <ul className="lista-ranking">
+      {itens.map((it, i) => (
+        <li
+          key={it.rotulo}
+          data-anima-linha
+          style={{ animationDelay: `calc(var(--atraso-secundario, 0ms) + ${i * 40}ms)` }}
+        >
+          <span className="lista-ranking-nome">{it.rotulo}</span>
+          <span className="lista-ranking-valor num">{dinheiro(it.revenue)}</span>
+          <span className="lista-ranking-conta num">{inteiro(it.count)} vendas</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default async function PainelPage({
   searchParams,
 }: {
@@ -297,6 +421,85 @@ export default async function PainelPage({
               formato="pct"
               nota="Cliques que viraram venda"
             />
+          </div>
+
+          {d.adSpendCaveat && (
+            <p className="metrica-nota" style={{ marginTop: "var(--e2)" }}>
+              Gasto não pode ser segmentado por plataforma/produto — mostrando total do período nos cartões de investimento, ROAS, lucro, ROI e margem.
+            </p>
+          )}
+
+          <div className="rotulo-seccao" style={{ marginTop: "var(--e5)" }}>Pagamentos</div>
+          <div className="grade grade-pagamentos">
+            <div className="cartao cartao-donut" data-anima style={{ gridColumn: "span 2", gridRow: "span 2" }}>
+              <div className="metrica-rotulo">
+                Vendas por Pagamento
+                <InfoIcone texto="Distribuição das vendas pagas por método de pagamento" />
+              </div>
+              <GraficoPagamento dados={d.paymentBreakdown} />
+            </div>
+            <Metrica rotulo="Vendas Pendentes" valorNum={d.pendingRevenue} valorTexto={dinheiro(d.pendingRevenue)} formato="moeda" tooltip="Soma de vendas com status pendente" />
+            <Metrica
+              rotulo="ROI"
+              valorNum={d.roi}
+              valorTexto={d.roi === null ? "—" : porcento(d.roi)}
+              formato="pct"
+              tooltip="Lucro dividido pelo investimento em anúncios"
+            />
+            <Metrica rotulo="Vendas Reembolsadas" valorNum={d.refundedRevenue} valorTexto={dinheiro(d.refundedRevenue)} formato="moeda" tooltip="Soma de vendas reembolsadas" />
+            <Metrica
+              rotulo="Margem"
+              valorNum={d.margin}
+              valorTexto={d.margin === null ? "—" : porcento(d.margin)}
+              formato="pct"
+              tooltip="Lucro dividido pelo faturamento"
+            />
+          </div>
+
+          <div className="grade grade-3" style={{ marginTop: "var(--e3)" }}>
+            <Metrica
+              rotulo="Chargeback"
+              valorNum={d.chargebackRate}
+              valorTexto={d.chargebackRate === null ? "—" : porcento(d.chargebackRate)}
+              formato="pct"
+              tooltip="Vendas contestadas sobre o total de vendas do período"
+            />
+          </div>
+
+          <div className="rotulo-seccao" style={{ marginTop: "var(--e5)" }}>Detalhamento</div>
+          <div className="grade grade-3">
+            <div className="cartao" data-anima>
+              <div className="metrica-rotulo">
+                Vendas por Produto
+                <InfoIcone texto="Faturamento pago agrupado por produto" />
+              </div>
+              <ListaRanking
+                vazio="Nenhuma venda por aqui."
+                itens={d.productBreakdown.map((p) => ({ rotulo: p.name, count: p.count, revenue: p.revenue }))}
+              />
+            </div>
+            <div className="cartao" data-anima>
+              <div className="metrica-rotulo">
+                Vendas por Fonte
+                <InfoIcone texto="Faturamento pago agrupado pela plataforma de origem do clique" />
+              </div>
+              <ListaRanking
+                vazio="Nenhuma venda por aqui."
+                itens={d.sourceBreakdown.map((s) => ({ rotulo: rotuloMetodo(s.platform), count: s.count, revenue: s.revenue }))}
+              />
+            </div>
+            <div className="cartao" data-anima>
+              <div className="metrica-rotulo">
+                Taxa de Aprovação
+                <InfoIcone texto="Vendas aprovadas sobre aprovadas mais recusadas, por método" />
+              </div>
+              <div className="aro-grade">
+                {["card", "pix", "boleto"].map((metodo) => {
+                  const linha = d.approvalRates.find((a) => a.method === metodo);
+                  return <Aro key={metodo} rotulo={rotuloMetodo(metodo)} rate={linha?.rate ?? null} />;
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="cartao" data-anima style={{ marginTop: "var(--e5)" }}>

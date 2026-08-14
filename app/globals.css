@@ -589,6 +589,115 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 .negativo { color: var(--negativo); text-shadow: var(--brilho-negativo); }
 .vazio { color: var(--texto-fraco); text-shadow: none; }
 
+/* ---------- Ícone de info + tooltip (generaliza .grafico-tooltip pra qualquer cartão) ---------- */
+.info-icone {
+  position: relative;
+  display: inline-flex;
+  margin-left: var(--e1);
+  color: var(--texto-fraco);
+  cursor: help;
+}
+.info-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--fundo-alto);
+  border: 1px solid var(--vidro-borda-forte);
+  border-radius: var(--raio-p);
+  padding: var(--e2) var(--e3);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--texto);
+  max-width: 220px;
+  width: max-content;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--rapido);
+  z-index: 5;
+}
+.info-icone:hover .info-tooltip,
+.info-icone:focus-visible .info-tooltip {
+  opacity: 1;
+}
+@media (max-width: 640px) {
+  /* Tooltip centralizado no ícone estoura a viewport quando o ícone fica perto da borda
+     direita do cartão (comum: rótulo curto + ícone logo depois). Ancora pela direita e
+     limita a largura à viewport em vez de centralizar. */
+  .info-tooltip {
+    left: auto;
+    right: 0;
+    transform: none;
+    max-width: min(200px, calc(100vw - 2 * var(--e4)));
+  }
+}
+
+/* ---------- Pagamentos: grade com donut largo + cartões simples ---------- */
+.grade-pagamentos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e3);
+  margin-bottom: var(--e3);
+}
+@media (min-width: 900px) {
+  .grade-pagamentos { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-flow: dense; }
+}
+.cartao-donut { display: flex; flex-direction: column; gap: var(--e3); }
+
+/* ---------- Donut (Vendas por Pagamento) ---------- */
+.grafico-donut-wrap { display: flex; align-items: center; gap: var(--e4); flex-wrap: wrap; }
+.donut-total-num { fill: var(--texto); font-size: 22px; font-weight: 600; font-family: var(--fonte-display); }
+.donut-total-rotulo { fill: var(--texto-fraco); font-size: 10px; }
+.donut-fatia {
+  animation: desenha 900ms var(--saida) both;
+  animation-delay: var(--atraso-secundario, 0ms);
+}
+.donut-legenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  font-size: 13px;
+  color: var(--texto-suave);
+}
+.donut-legenda li { display: flex; align-items: center; gap: var(--e2); }
+.donut-ponto { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---------- Aro (taxa de aprovação) ---------- */
+.aro-grade { display: flex; justify-content: space-around; gap: var(--e3); flex-wrap: wrap; }
+.aro-item { display: flex; flex-direction: column; align-items: center; gap: var(--e1); }
+.aro-valor { fill: var(--texto); font-size: 16px; font-weight: 600; }
+.aro-rotulo { font-size: 12px; color: var(--texto-suave); }
+@keyframes aro-desenha {
+  from { stroke-dashoffset: var(--comprimento); }
+  to { stroke-dashoffset: var(--offset-final); }
+}
+.aro-anima {
+  stroke-dasharray: var(--comprimento);
+  stroke-dashoffset: var(--offset-final);
+  animation: aro-desenha 900ms var(--saida) both;
+  animation-delay: var(--atraso-secundario, 0ms);
+}
+
+/* ---------- Lista ranqueada (Vendas por Produto / Fonte) ---------- */
+.lista-ranking { list-style: none; margin: 0; padding: 0; }
+.lista-ranking li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--e3);
+  align-items: center;
+  padding: var(--e2) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+}
+.lista-ranking li:last-child { border-bottom: none; }
+.lista-ranking-nome { color: var(--texto); text-transform: capitalize; }
+.lista-ranking-valor { font-weight: 600; }
+.lista-ranking-conta { color: var(--texto-fraco); font-size: 12px; }
+
 /* ---------- Gráfico ---------- */
 .grafico { width: 100%; height: auto; display: block; overflow: visible; }
 .grafico-grade { stroke: var(--vidro-borda-forte); stroke-width: 1; }

@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { sales, clicks, adSpendSnapshots, products } from "@/lib/db/schema";
+import { sales, clicks, adSpendSnapshots, products, campaigns } from "@/lib/db/schema";
 
 // ad_spend_snapshots.date comes straight from Meta's Insights API `date_start`, which is
 // expressed in the ad account's reporting timezone — not UTC. sales.received_at and
@@ -42,6 +42,19 @@ export interface DashboardResult {
     campaigns: string[];
     platforms: string[];
   };
+  roi: number | null; // profit / adSpend
+  margin: number | null; // profit / netRevenue
+  pendingRevenue: number;
+  refundedRevenue: number;
+  chargebackRate: number | null; // charged_back count / total count, any status
+  paymentBreakdown: { method: string; count: number; revenue: number }[];
+  approvalRates: { method: string; rate: number | null }[]; // paid / (paid + failed)
+  productBreakdown: { productId: string; name: string; count: number; revenue: number }[];
+  sourceBreakdown: { platform: string; count: number; revenue: number }[];
+  // true when platform/productId is filtered — ad_spend_snapshots has no platform/product
+  // column, only campaignId, so spend can't be segmented on those axes (campaign filtering
+  // of spend IS applied, see spendConds below).
+  adSpendCaveat: boolean;
 }
 
 // Filters that reach `sales` only through `clicks` (campaign, platform) — both single
@@ -65,6 +78,12 @@ function saleConds(f: DashboardFilters, requireStatus = true) {
   return conds;
 }
 
+// Same filter surface as saleConds but without forcing status='paid' — used by breakdowns
+// that need to see every status (pending/refunded/charged_back/failed alongside paid).
+function saleCondsAnyStatus(f: DashboardFilters) {
+  return saleConds(f, false);
+}
+
 // Single-pass GROUP BY per metric — cheap at personal-project volume (plan.md § Schema Postgres).
 export async function getDashboard(f: DashboardFilters): Promise<DashboardResult> {
   const revenueRow = await db.select({ total: sql<string>`coalesce(sum(${sales.amount}), 0)` })
@@ -75,6 +94,12 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   const spendConds = [];
   if (f.from) spendConds.push(gte(adSpendSnapshots.date, f.from));
   if (f.to) spendConds.push(lte(adSpendSnapshots.date, f.to));
+  // Campaign is the only dimension ad_spend_snapshots actually carries (via campaignId) —
+  // platform/product have no equivalent column, so those two filters can't segment spend.
+  if (f.campaign) {
+    spendConds.push(sql`${adSpendSnapshots.campaignId} in (select ${campaigns.id} from ${campaigns} where ${campaigns.name} = ${f.campaign})`);
+  }
+  const adSpendCaveat = Boolean(f.platform || f.productId);
   const spendRow = await db.select({ total: sql<string>`coalesce(sum(${adSpendSnapshots.spend}), 0)` })
     .from(adSpendSnapshots)
     .where(spendConds.length ? and(...spendConds) : undefined);
@@ -105,7 +130,15 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
   if (f.to) dailyConds.push(sql`(${sales.receivedAt} at time zone ${TZ})::date <= ${f.to}::date`);
   if (!f.from && !f.to) dailyConds.push(sql`${sales.receivedAt} >= now() - interval '14 days'`);
 
-  const [productRows, campaignRows, platformRows, dailyRevenueRows] = await Promise.all([
+  const statusBreakdownConds = saleCondsAnyStatus(f);
+  const approvalConds = [...saleCondsAnyStatus(f), sql`${sales.status} in ('paid', 'failed')`];
+  const productConds = saleConds(f);
+  const sourceConds = saleConds(f);
+
+  const [
+    productRows, campaignRows, platformRows, dailyRevenueRows,
+    paymentBreakdownRows, statusBreakdownRows, approvalRows, productBreakdownRows, sourceBreakdownRows,
+  ] = await Promise.all([
     db.select({ id: products.id, name: products.name }).from(products),
     db.selectDistinct({ v: clicks.metaCampaignName }).from(clicks),
     db.selectDistinct({ v: clicks.platform }).from(clicks),
@@ -116,7 +149,55 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
       .where(and(...dailyConds))
       .groupBy(sql`(${sales.receivedAt} at time zone ${TZ})::date`)
       .orderBy(sql`(${sales.receivedAt} at time zone ${TZ})::date`),
+    db.select({
+      method: sql<string>`coalesce(${sales.paymentMethod}, 'outros')`,
+      count: sql<number>`count(*)`,
+      revenue: sql<string>`coalesce(sum(${sales.amount}), 0)`,
+    }).from(sales).where(and(...saleConds(f))).groupBy(sql`coalesce(${sales.paymentMethod}, 'outros')`),
+    db.select({
+      status: sales.status,
+      count: sql<number>`count(*)`,
+      revenue: sql<string>`coalesce(sum(${sales.amount}), 0)`,
+    }).from(sales).where(statusBreakdownConds.length ? and(...statusBreakdownConds) : undefined).groupBy(sales.status),
+    db.select({
+      method: sql<string>`coalesce(${sales.paymentMethod}, 'outros')`,
+      status: sales.status,
+      count: sql<number>`count(*)`,
+    }).from(sales).where(and(...approvalConds)).groupBy(sql`coalesce(${sales.paymentMethod}, 'outros')`, sales.status),
+    db.select({
+      productId: sales.productId,
+      name: products.name,
+      count: sql<number>`count(*)`,
+      revenue: sql<string>`coalesce(sum(${sales.amount}), 0)`,
+    }).from(sales).innerJoin(products, eq(sales.productId, products.id))
+      .where(and(...productConds)).groupBy(sales.productId, products.name)
+      .orderBy(sql`sum(${sales.amount}) desc`),
+    db.select({
+      platform: clicks.platform,
+      count: sql<number>`count(*)`,
+      revenue: sql<string>`coalesce(sum(${sales.amount}), 0)`,
+    }).from(sales).innerJoin(clicks, eq(sales.clickid, clicks.id))
+      .where(and(...sourceConds)).groupBy(clicks.platform)
+      .orderBy(sql`sum(${sales.amount}) desc`),
   ]);
+
+  const totalSalesCount = statusBreakdownRows.reduce((n, r) => n + Number(r.count), 0);
+  const chargedBackCount = Number(statusBreakdownRows.find((r) => r.status === "charged_back")?.count ?? 0);
+  const pendingRevenue = Number(statusBreakdownRows.find((r) => r.status === "pending")?.revenue ?? 0);
+  const refundedRevenue = Number(statusBreakdownRows.find((r) => r.status === "refunded")?.revenue ?? 0);
+  const chargebackRate = totalSalesCount > 0 ? chargedBackCount / totalSalesCount : null;
+
+  const approvalByMethod = new Map<string, { paid: number; failed: number }>();
+  for (const row of approvalRows) {
+    const entry = approvalByMethod.get(row.method) ?? { paid: 0, failed: 0 };
+    if (row.status === "paid") entry.paid += Number(row.count);
+    else if (row.status === "failed") entry.failed += Number(row.count);
+    approvalByMethod.set(row.method, entry);
+  }
+  const approvalRates = Array.from(approvalByMethod.entries()).map(([method, { paid, failed }]) => ({
+    method,
+    rate: paid + failed > 0 ? paid / (paid + failed) : null,
+  }));
 
   const clicksCount = Number(clickCountRow[0]?.n ?? 0);
   const paidCount = Number(paidRow[0]?.n ?? 0);
@@ -136,5 +217,19 @@ export async function getDashboard(f: DashboardFilters): Promise<DashboardResult
       campaigns: campaignRows.map((r) => r.v).filter((v): v is string => !!v),
       platforms: platformRows.map((r) => r.v).filter((v): v is string => !!v),
     },
+    roi: adSpend > 0 ? profit / adSpend : null,
+    margin: netRevenue > 0 ? profit / netRevenue : null,
+    pendingRevenue,
+    refundedRevenue,
+    chargebackRate,
+    paymentBreakdown: paymentBreakdownRows.map((r) => ({ method: r.method, count: Number(r.count), revenue: Number(r.revenue) })),
+    approvalRates,
+    productBreakdown: productBreakdownRows
+      .filter((r): r is typeof r & { productId: string; name: string } => !!r.productId)
+      .map((r) => ({ productId: r.productId, name: r.name, count: Number(r.count), revenue: Number(r.revenue) })),
+    sourceBreakdown: sourceBreakdownRows
+      .filter((r): r is typeof r & { platform: string } => !!r.platform)
+      .map((r) => ({ platform: r.platform, count: Number(r.count), revenue: Number(r.revenue) })),
+    adSpendCaveat,
   };
 }
