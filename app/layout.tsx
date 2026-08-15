@@ -1,12 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-// next/font baixa e auto-hospeda no build: zero requisição a servidor externo em runtime,
-// zero salto de layout na troca da fonte de fallback pela real. Uma fonte só — flat design
-// não precisa de fonte de destaque separada nem de monoespaçada pros números.
-const inter = Inter({
-  subsets: ["latin"],
+// UberMove — mesma fonte usada pela Utmify (uso interno/próprio, sem redistribuição).
+// Arquivos baixados direto do CDN deles (app.utmify.com.br/fonts/) e auto-hospedados aqui.
+const fonteUi = localFont({
+  src: [
+    { path: "../public/fonts/UberMoveTextLight.otf", weight: "300", style: "normal" },
+    { path: "../public/fonts/UberMoveTextRegular.otf", weight: "400", style: "normal" },
+    { path: "../public/fonts/UberMoveTextMedium.otf", weight: "500", style: "normal" },
+    { path: "../public/fonts/UberMoveTextBold.otf", weight: "700", style: "normal" },
+  ],
   variable: "--fonte-ui",
   display: "swap",
 });
@@ -25,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="pt-BR" className={fonteUi.variable}>
       <body>{children}</body>
     </html>
   );

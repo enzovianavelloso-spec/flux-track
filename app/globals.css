@@ -7,19 +7,19 @@
  */
 
 :root {
-  /* ---- Superfícies ---- */
-  --fundo: #0a0e17;
-  --fundo-alto: #0f1420;  /* barra fixa do topo */
-  --cartao: #131824;
-  --cartao-hover: #171d2c;
-  --suave: #1a2030;       /* fundo de campo, badge neutro, trilho de barra */
-  --borda: #232938;
-  --borda-forte: #313a4f;
+  /* ---- Superfícies (valores extraídos ao vivo do dashboard app.utmify.com.br) ---- */
+  --fundo: #161d31;
+  --fundo-alto: #161d31;  /* barra fixa do topo — mesma cor do fundo na referência */
+  --cartao: #283046;
+  --cartao-hover: #2d3650;
+  --suave: #1f273c;       /* fundo de campo, badge neutro, trilho de barra */
+  --borda: #333d58;
+  --borda-forte: #454f6e;
 
   /* ---- Texto ---- */
-  --texto: #f1f5f9;
-  --texto-suave: #97a3b8;
-  --texto-fraco: #6b7688;
+  --texto: #d0d2d6;
+  --texto-suave: #b4b7c9;
+  --texto-fraco: #7c8397;
 
   /* ---- Semântica ---- */
   --positivo: #22c55e;
@@ -44,11 +44,11 @@
   --e6: 32px;
   --e7: 48px;
 
-  --raio: 12px;
+  --raio: 6px;
   --raio-p: 8px;
   --raio-pill: 999px;
 
-  --sombra: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --sombra: 0 4px 24px rgba(34, 41, 47, 0.24);
 
   /* ---- Movimento ---- */
   --rapido: 150ms;
@@ -78,7 +78,7 @@ body {
    variant numérico muda — números monoespaçados destoavam da referência. */
 .num {
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
 /* ---------- Foco visível (nunca remover: navegação por teclado) ---------- */
@@ -221,6 +221,31 @@ body {
   margin-bottom: var(--e4);
 }
 
+/* Tabs de período: grid de 4 colunas iguais no mobile pra nunca quebrar linha (o "Tudo"
+   sobrando sozinho embaixo comia uma linha inteira à toa). Volta a flex compacto a partir
+   de onde a largura sobra. */
+.filtros-periodo {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.filtros-periodo .pill { justify-content: center; }
+@media (min-width: 480px) {
+  .filtros-periodo { display: flex; flex-wrap: wrap; }
+}
+
+/* Formulário de filtro: 2 colunas no mobile (datas juntas, campanha/plataforma juntas,
+   produto+aplicar juntos) — em vez de 6 campos empilhados ocupando a tela toda. */
+.filtros-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+.filtros-form .campo, .filtros-form .botao { width: 100%; }
+@media (min-width: 768px) {
+  .filtros-form { display: flex; flex-wrap: wrap; }
+  .filtros-form .campo, .filtros-form .botao { width: auto; }
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -304,8 +329,10 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   margin-bottom: var(--e3);
 }
 
-.grade-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.grade-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Mobile: 1 coluna, cada cartão ocupa a largura toda (padrão Utmify) — 2 colunas
+   espremidas quebravam número grande e deixavam os blocos "cortados" ao meio. */
+.grade-4 { grid-template-columns: 1fr; }
+.grade-3 { grid-template-columns: 1fr; }
 
 @media (min-width: 900px) {
   .grade-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -341,23 +368,23 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: center;
   gap: var(--e2);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--texto-suave);
   margin-bottom: var(--e2);
 }
 
 .metrica-valor {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   line-height: 1.15;
 }
 
 .metrica-valor-hero {
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   line-height: 1.1;
 }
 
@@ -556,7 +583,7 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
 /* ---------- Pagamentos: grade com donut largo + cartões simples ---------- */
 .grade-pagamentos {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--e3);
   margin-bottom: var(--e3);
 }
@@ -564,6 +591,9 @@ input[type="date"].campo::-webkit-calendar-picker-indicator {
   .grade-pagamentos { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-flow: dense; }
 }
 .cartao-donut { display: flex; flex-direction: column; gap: var(--e3); }
+@media (min-width: 900px) {
+  .cartao-donut { grid-column: span 2; grid-row: span 2; }
+}
 
 /* ---------- Donut (Vendas por Pagamento) ---------- */
 .grafico-donut-wrap { display: flex; align-items: center; gap: var(--e4); flex-wrap: wrap; }

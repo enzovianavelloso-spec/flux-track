@@ -356,7 +356,7 @@ export default async function PainelPage({
             </p>
           </div>
 
-          <div className="filtros">
+          <div className="filtros filtros-periodo">
             {periodos.map((p) => (
               <Link
                 key={p.rotulo}
@@ -372,7 +372,7 @@ export default async function PainelPage({
             </Link>
           </div>
 
-          <form method="get" className="filtros" style={{ marginBottom: "var(--e5)" }}>
+          <form method="get" className="filtros filtros-form" style={{ marginBottom: "var(--e5)" }}>
             <input type="date" name="from" defaultValue={sp.from} className="campo" aria-label="Data inicial" />
             <input type="date" name="to" defaultValue={sp.to} className="campo" aria-label="Data final" />
             <select name="campaign" defaultValue={sp.campaign ?? ""} className="campo" aria-label="Campanha">
@@ -435,7 +435,7 @@ export default async function PainelPage({
 
           <div className="rotulo-seccao" style={{ marginTop: "var(--e5)" }}>Pagamentos</div>
           <div className="grade grade-pagamentos">
-            <div className="cartao cartao-donut" data-anima style={{ gridColumn: "span 2", gridRow: "span 2" }}>
+            <div className="cartao cartao-donut" data-anima>
               <div className="metrica-rotulo">
                 Vendas por Pagamento
                 <InfoIcone texto="Distribuição das vendas pagas por método de pagamento" />

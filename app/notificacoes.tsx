@@ -9,31 +9,13 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-// Som tipo caixa registradora ("cha-ching") via Web Audio — sem asset pra licenciar/enviar
-// pra um som que toca poucas vezes por dia. Golpe metálico + moedas caindo em sequência,
-// no padrão usado por Hotmart/Kiwify/Utmify pra alerta de venda.
+// Som de caixa registradora real (mp3), não sintetizado — Web Audio nunca ficava
+// idêntico à referência. Asset: "Cash Register (Kaching) - Sound Effect" por
+// Modestas123123, Pixabay Content License (uso livre, inclusive comercial, sem
+// atribuição obrigatória). https://pixabay.com/sound-effects/film-special-effects-cash-register-kaching-sound-effect-125042/
 function tocarSom() {
-  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new Ctx();
-  const tocarNota = (freq: number, inicio: number, duracao: number, tipo: OscillatorType, pico: number) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = tipo;
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, ctx.currentTime + inicio);
-    gain.gain.linearRampToValueAtTime(pico, ctx.currentTime + inicio + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + inicio + duracao);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(ctx.currentTime + inicio);
-    osc.stop(ctx.currentTime + inicio + duracao);
-  };
-  // Impacto metálico ("cha")
-  tocarNota(2400, 0, 0.1, "triangle", 0.2);
-  tocarNota(3600, 0, 0.08, "triangle", 0.14);
-  // Moedas caindo ("ching-ching-ching")
-  [1800, 2200, 2600, 3000].forEach((freq, i) => {
-    tocarNota(freq, 0.08 + i * 0.05, 0.09, "triangle", 0.18);
-  });
+  const audio = new Audio("/sons/caixa-registradora.mp3");
+  audio.play().catch(() => {});
 }
 
 type Estado = "indisponivel" | "negado" | "inativo" | "ativo" | "carregando";
