@@ -10,10 +10,11 @@
 # aqui: gasto da Meta é dado que se assenta ao longo do dia, e o retry de CAPI já é idempotente.
 name: Cron
 
+# DESATIVADO 2026-08-20: Flux Track aposentado, GGCheckout+Utmify assumiram o rastreio.
+# Deixar o schedule ativo reenviaria CAPI (Purchase/InitiateCheckout) de vendas antigas
+# via retry-capi, duplicando os eventos que o GGCheckout nativo agora envia sozinho.
 on:
-  schedule:
-    - cron: "*/15 * * * *"
-  workflow_dispatch: # permite rodar na mão pela aba Actions
+  workflow_dispatch: # só manual, sem agendamento
 
 concurrency:
   # Se um disparo atrasar e encavalar com o próximo, deixa o que está rodando terminar em vez
