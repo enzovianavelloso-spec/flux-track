@@ -1,23 +1,53 @@
 import { db } from "@/lib/db/client";
 import { adAccounts, campaigns, adSpendSnapshots } from "@/lib/db/schema";
-import { fetchYesterdayAndTodayInsights } from "@/lib/meta/marketing-api";
+import { fetchYesterdayAndTodayInsights, fetchCampaignsMeta } from "@/lib/meta/marketing-api";
 import { env } from "@/lib/env";
 
+// Centavos (Meta) -> reais (numeric column) — ausente/vazio vira null, não "0".
+function centavosParaReais(v: string | undefined): string | null {
+  return v ? String(Number(v) / 100) : null;
+}
+
 export async function syncSpend() {
-  const rows = await fetchYesterdayAndTodayInsights();
-  if (!rows.length) return { upserted: 0 };
+  const [rows, campaignMetaRows] = await Promise.all([
+    fetchYesterdayAndTodayInsights(),
+    fetchCampaignsMeta(),
+  ]);
 
-  await db.insert(adAccounts)
-    .values({ id: env.metaAdAccountId, currency: rows[0].account_currency, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: adAccounts.id, set: { currency: rows[0].account_currency, updatedAt: new Date() } });
-
-  const seenCampaigns = new Map<string, string>();
-  for (const r of rows) seenCampaigns.set(r.campaign_id, r.campaign_name);
-  for (const [id, name] of seenCampaigns) {
-    await db.insert(campaigns)
-      .values({ id, adAccountId: env.metaAdAccountId, name, updatedAt: new Date() })
-      .onConflictDoUpdate({ target: campaigns.id, set: { name, updatedAt: new Date() } });
+  if (rows.length) {
+    await db.insert(adAccounts)
+      .values({ id: env.metaAdAccountId, currency: rows[0].account_currency, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: adAccounts.id, set: { currency: rows[0].account_currency, updatedAt: new Date() } });
   }
+
+  // Fonte é a UNIÃO de campaignMetaRows (todas as campanhas da conta — cobre pausadas sem
+  // gasto recente, que /insights nunca retornaria) com os campaign_id vistos em `rows`
+  // (spend de hoje/ontem). A união é obrigatória, não só a preferência: ad_spend_snapshots
+  // abaixo tem FK pra campaigns.id — se /campaigns não devolver um id que /insights devolveu
+  // (ex: campanha arquivada/deletada mas com gasto histórico no período), faltaria a linha
+  // pai e o insert de spend quebraria a constraint, derrubando o cron inteiro.
+  const insightNameById = new Map(rows.map((r) => [r.campaign_id, r.campaign_name]));
+  const metaById = new Map(campaignMetaRows.map((c) => [c.id, c]));
+  const todosOsIds = new Set([...metaById.keys(), ...insightNameById.keys()]);
+
+  for (const id of todosOsIds) {
+    const c = metaById.get(id);
+    const name = c?.name ?? insightNameById.get(id) ?? id;
+    const set = {
+      name,
+      status: c?.status ?? null,
+      effectiveStatus: c?.effective_status ?? null,
+      objective: c?.objective ?? null,
+      dailyBudget: centavosParaReais(c?.daily_budget),
+      lifetimeBudget: centavosParaReais(c?.lifetime_budget),
+      updatedAt: new Date(),
+    };
+    await db.insert(campaigns)
+      .values({ id, adAccountId: env.metaAdAccountId, ...set })
+      .onConflictDoUpdate({ target: campaigns.id, set });
+  }
+
+  if (!rows.length) return { upserted: 0, campaigns: campaignMetaRows.length };
 
   for (const r of rows) {
     await db.insert(adSpendSnapshots).values({

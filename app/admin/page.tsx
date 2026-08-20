@@ -1,16 +1,13 @@
 import { Cabecalho } from "../cabecalho";
 import { Anima } from "../anima";
 import { getAdminDiagnostics } from "@/lib/db/queries/admin";
+import { Selo } from "../_lib/ui";
 
 function quando(d: Date | null) {
   if (!d) return "—";
   return new Date(d).toLocaleString("pt-BR", {
     day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
   });
-}
-
-function Selo({ tipo, children }: { tipo: "ok" | "erro" | "espera" | "neutro"; children: React.ReactNode }) {
-  return <span className={`selo selo-${tipo}`}>{children}</span>;
 }
 
 function Secao({

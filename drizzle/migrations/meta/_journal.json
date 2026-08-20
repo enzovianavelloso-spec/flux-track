@@ -29,6 +29,13 @@
       "when": 1787192191136,
       "tag": "0003_add_capi_checkout_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787195009644,
+      "tag": "0004_campaign_budget_status",
+      "breakpoints": true
     }
   ]
 }

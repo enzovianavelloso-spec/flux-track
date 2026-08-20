@@ -19,7 +19,10 @@ export const campaigns = pgTable("campaigns", {
   adAccountId: text("ad_account_id").references(() => adAccounts.id),
   name: text("name"),
   objective: text("objective"),
-  status: text("status"),
+  status: text("status"), // Meta "status": ACTIVE/PAUSED/DELETED/ARCHIVED
+  effectiveStatus: text("effective_status"), // Meta "effective_status": mais granular (ex: PENDING_REVIEW)
+  dailyBudget: numeric("daily_budget", { precision: 12, scale: 2 }),
+  lifetimeBudget: numeric("lifetime_budget", { precision: 12, scale: 2 }),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });
 

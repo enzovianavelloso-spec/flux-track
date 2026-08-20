@@ -11,7 +11,7 @@ function Marca() {
 }
 
 /** Barra fixa do topo. `atual` marca a página em que o usuário está. */
-export function Cabecalho({ atual }: { atual: "painel" | "diagnostico" }) {
+export function Cabecalho({ atual }: { atual: "painel" | "anuncios" | "diagnostico" }) {
   // Horário real, não decoração: esta página só chega até aqui depois de consultar o
   // banco com sucesso (getDashboard/getAdminDiagnostics rodam antes do JSX), então "agora"
   // É o horário do dado — ao contrário do selo fixo "Banco conectado" que veio antes disso
@@ -33,6 +33,9 @@ export function Cabecalho({ atual }: { atual: "painel" | "diagnostico" }) {
         <nav className="nav" aria-label="Navegação principal">
           <Link href="/" aria-current={atual === "painel" ? "page" : undefined}>
             Painel
+          </Link>
+          <Link href="/anuncios" aria-current={atual === "anuncios" ? "page" : undefined}>
+            Anúncios
           </Link>
           <Link href="/admin" aria-current={atual === "diagnostico" ? "page" : undefined}>
             Diagnóstico
