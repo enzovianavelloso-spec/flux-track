@@ -1,0 +1,41 @@
+# Cron do Flux Track.
+#
+# A hospedagem é Hostinger com app Node.js gerenciado: não existe `crontab -e` (o painel só
+# expõe Cron Jobs pra hospedagem PHP) e o checklist antigo assumia VPS+PM2 que nunca existiu —
+# resultado: sync-spend e retry-capi NUNCA rodaram em produção, e o painel ficava congelado
+# mostrando zero. Este workflow é o agendador: chama os endpoints HTTP que já existem,
+# autenticado pelo mesmo CRON_SECRET (ver lib/cron/verify.ts).
+#
+# GitHub Actions não garante horário exato — em pico o disparo atrasa alguns minutos. Aceitável
+# aqui: gasto da Meta é dado que se assenta ao longo do dia, e o retry de CAPI já é idempotente.
+name: Cron
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # permite rodar na mão pela aba Actions
+
+concurrency:
+  # Se um disparo atrasar e encavalar com o próximo, deixa o que está rodando terminar em vez
+  # de abrir dois syncs concorrentes contra a mesma janela de dados.
+  group: cron
+  cancel-in-progress: false
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sincroniza gasto e campanhas da Meta
+        run: |
+          curl -fsS -m 120 -X GET \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            https://flux.viafranca.com.br/api/cron/sync-spend
+
+      - name: Reenvia conversões que a Meta não confirmou
+        # `always()`: falha do sync (ex: instabilidade da Marketing API) não pode bloquear o
+        # reenvio de conversão — esse é o passo que mexe com venda.
+        if: always()
+        run: |
+          curl -fsS -m 120 -X GET \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            https://flux.viafranca.com.br/api/cron/retry-capi

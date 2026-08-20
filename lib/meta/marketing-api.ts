@@ -68,3 +68,45 @@ export async function fetchCampaignsMeta(): Promise<CampaignMetaRow[]> {
   const json = await res.json();
   return json.data ?? [];
 }
+
+export interface OrcamentoDeAdsets {
+  daily: number; // centavos somados dos adsets ativos; 0 = nenhum
+  lifetime: number;
+}
+
+/**
+ * Orçamento somado dos adsets ATIVOS, agrupado por campanha.
+ *
+ * Em campanha ABO (orçamento por conjunto — a estrutura usada aqui, ex: "ABO 1x1x1") a Meta
+ * devolve daily_budget/lifetime_budget VAZIOS no endpoint de campanha: o valor mora no adset.
+ * Sem esta chamada a coluna Orçamento fica "—" justamente nas campanhas que mais importam.
+ * Em CBO é o contrário (valor na campanha, adsets zerados) — por isso sync-spend só usa este
+ * total como fallback, nunca por cima do orçamento próprio da campanha.
+ *
+ * Só adset ACTIVE entra: conjunto pausado não gasta, somá-lo inflaria o teto diário exibido.
+ */
+export async function fetchAdsetBudgets(): Promise<Map<string, OrcamentoDeAdsets>> {
+  const fields = ["campaign_id", "status", "daily_budget", "lifetime_budget"].join(",");
+
+  const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${env.metaAdAccountId}/adsets`);
+  url.searchParams.set("fields", fields);
+  url.searchParams.set("limit", "500");
+  url.searchParams.set("access_token", env.metaCapiToken);
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Meta Adsets API ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  const rows: { campaign_id?: string; status?: string; daily_budget?: string; lifetime_budget?: string }[] = json.data ?? [];
+
+  const porCampanha = new Map<string, OrcamentoDeAdsets>();
+  for (const r of rows) {
+    if (!r.campaign_id || r.status !== "ACTIVE") continue;
+    const atual = porCampanha.get(r.campaign_id) ?? { daily: 0, lifetime: 0 };
+    // A Meta manda "0" (string) pro campo não usado — Number() já resolve, mas o guard
+    // evita NaN somado silenciosamente se o campo vier ausente ou malformado.
+    atual.daily += Number(r.daily_budget) || 0;
+    atual.lifetime += Number(r.lifetime_budget) || 0;
+    porCampanha.set(r.campaign_id, atual);
+  }
+  return porCampanha;
+}

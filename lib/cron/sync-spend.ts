@@ -1,17 +1,22 @@
 import { db } from "@/lib/db/client";
 import { adAccounts, campaigns, adSpendSnapshots } from "@/lib/db/schema";
-import { fetchYesterdayAndTodayInsights, fetchCampaignsMeta } from "@/lib/meta/marketing-api";
+import { fetchYesterdayAndTodayInsights, fetchCampaignsMeta, fetchAdsetBudgets } from "@/lib/meta/marketing-api";
 import { env } from "@/lib/env";
 
-// Centavos (Meta) -> reais (numeric column) — ausente/vazio vira null, não "0".
-function centavosParaReais(v: string | undefined): string | null {
-  return v ? String(Number(v) / 100) : null;
+// Centavos (Meta) -> reais (numeric column). Ausente, vazio E zero viram null: a Meta manda
+// "0" no campo de orçamento que a estrutura não usa (lifetime_budget numa campanha diária, e
+// vice-versa), então tratar 0 como valor real gravaria "R$ 0,00/total" — e, pior, faria o
+// `??` do fallback ABO achar que já tem orçamento e nunca somar os adsets.
+function centavosParaReais(v: string | number | undefined): string | null {
+  const n = Number(v);
+  return v !== undefined && Number.isFinite(n) && n !== 0 ? String(n / 100) : null;
 }
 
 export async function syncSpend() {
-  const [rows, campaignMetaRows] = await Promise.all([
+  const [rows, campaignMetaRows, adsetBudgets] = await Promise.all([
     fetchYesterdayAndTodayInsights(),
     fetchCampaignsMeta(),
+    fetchAdsetBudgets(),
   ]);
 
   if (rows.length) {
@@ -33,13 +38,16 @@ export async function syncSpend() {
   for (const id of todosOsIds) {
     const c = metaById.get(id);
     const name = c?.name ?? insightNameById.get(id) ?? id;
+    // CBO traz o orçamento na campanha; ABO deixa vazio ali e guarda no adset. Preferir o da
+    // campanha e cair pro somatório dos adsets ativos cobre as duas estruturas com uma regra só.
+    const doAdset = adsetBudgets.get(id);
     const set = {
       name,
       status: c?.status ?? null,
       effectiveStatus: c?.effective_status ?? null,
       objective: c?.objective ?? null,
-      dailyBudget: centavosParaReais(c?.daily_budget),
-      lifetimeBudget: centavosParaReais(c?.lifetime_budget),
+      dailyBudget: centavosParaReais(c?.daily_budget) ?? centavosParaReais(doAdset?.daily),
+      lifetimeBudget: centavosParaReais(c?.lifetime_budget) ?? centavosParaReais(doAdset?.lifetime),
       updatedAt: new Date(),
     };
     await db.insert(campaigns)

@@ -76,12 +76,21 @@ tentativas e reenvia.
 
 ## Cron
 
-```bash
-# hourly, crontab -e
-0 * * * * cd /path/to/flux-track && npm run sync-spend >> /var/log/flux-track-sync.log 2>&1
+Roda pelo GitHub Actions (`.github/workflows/cron.yml`), a cada 15 min, chamando os endpoints
+HTTP `/api/cron/sync-spend` e `/api/cron/retry-capi` autenticados pelo header `x-cron-secret`.
 
-# a cada 5 min — reenvia conversões que o Meta CAPI não confirmou
-*/5 * * * * cd /path/to/flux-track && npm run retry-capi >> /var/log/flux-track-retry.log 2>&1
+**Não é `crontab -e`.** A hospedagem é Hostinger com app Node.js gerenciado — o painel não
+expõe Cron Jobs pra esse tipo de app, e o VPS+PM2 que a doc antiga assumia nunca existiu.
+Consequência real: entre 13/08 e 20/08 nenhum dos dois jobs rodou e o painel ficou zerado
+mesmo com campanha ativa gastando. Se for migrar de host, migrar o agendador junto.
+
+Pré-requisito: secret `CRON_SECRET` cadastrado no repositório (Settings → Secrets and
+variables → Actions), com o mesmo valor da variável de ambiente `CRON_SECRET` do hPanel.
+
+Pra rodar na mão: aba **Actions → Cron → Run workflow**, ou
+
+```bash
+curl -fsS -H "x-cron-secret: $CRON_SECRET" https://flux.viafranca.com.br/api/cron/sync-spend
 ```
 
 ## Deploy
