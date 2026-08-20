@@ -53,7 +53,7 @@ export default async function DiagnosticoPage({
 
           <div className="grade grade-3" style={{ marginBottom: "var(--e5)" }}>
             <div className="cartao cartao-metrica" data-anima>
-              <div className="metrica-rotulo">Conversões enviadas à Meta</div>
+              <div className="metrica-rotulo">Purchase enviados à Meta</div>
               <div className="metrica-valor num positivo" data-num-valor={d.sentCount} data-num-formato="inteiro">
                 {d.sentCount}
               </div>
@@ -81,6 +81,27 @@ export default async function DiagnosticoPage({
               <div className="metrica-nota">Do webhook recebido até a resposta</div>
             </div>
           </div>
+
+          <Secao
+            titulo="Eventos enviados à Meta"
+            descricao="Todo evento que o Flux Track manda pro Meta CAPI, por tipo."
+          >
+            <table className="tabela">
+              <thead>
+                <tr><th>Evento</th><th>Quando dispara</th><th>Enviados</th><th>Falharam</th></tr>
+              </thead>
+              <tbody>
+                {d.eventCounts.map((ev) => (
+                  <tr key={ev.name} data-anima-linha>
+                    <td>{ev.name}</td>
+                    <td className="vazio">{ev.description}</td>
+                    <td className="num positivo">{ev.sent}</td>
+                    <td className={ev.failed > 0 ? "num negativo" : "num vazio"}>{ev.failed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Secao>
 
           <Secao
             titulo="Webhooks recebidos"

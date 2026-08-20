@@ -67,10 +67,19 @@ export const sales = pgTable("sales", {
   clickid: text("clickid").references(() => clicks.id), // NULL = unattributed, never blocks insert
   matched: boolean("matched").default(false),
   fbp: text("fbp"),
+  // Purchase-stage CAPI (fires on *.paid). Kept on its own column set — separate from
+  // capi_checkout_* below — because a single shared column can't dedup two independent
+  // funnel stages: overwriting it from the checkout stage made the *.paid handler read
+  // "already sent" and skip Purchase entirely (found 2026-08-19, see capi.ts).
   capiStatus: text("capi_status").default("not_applicable"), // pending/sent/failed/not_applicable
   capiAttempts: integer("capi_attempts").default(0).notNull(),
   capiSentAt: timestamp("capi_sent_at", { withTimezone: true }),
   capiResponse: jsonb("capi_response"),
+  // Checkout-stage CAPI (InitiateCheckout + AddPaymentInfo, fires on *.generated).
+  capiCheckoutStatus: text("capi_checkout_status").default("not_applicable"),
+  capiCheckoutAttempts: integer("capi_checkout_attempts").default(0).notNull(),
+  capiCheckoutSentAt: timestamp("capi_checkout_sent_at", { withTimezone: true }),
+  capiCheckoutResponse: jsonb("capi_checkout_response"),
   rawPayload: jsonb("raw_payload").notNull(), // full webhook body incl. products[] upsells
 }, (t) => [
   index("sales_received_at_idx").on(t.receivedAt),
@@ -78,6 +87,7 @@ export const sales = pgTable("sales", {
   index("sales_product_id_idx").on(t.productId),
   index("sales_clickid_idx").on(t.clickid),
   index("sales_capi_status_idx").on(t.capiStatus),
+  index("sales_capi_checkout_status_idx").on(t.capiCheckoutStatus),
 ]);
 
 // One row per inbound webhook request, written before any business-logic processing —

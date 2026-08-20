@@ -1,7 +1,7 @@
 import { and, inArray, lt, or, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { sales } from "@/lib/db/schema";
-import { sendPurchaseEvent } from "@/lib/meta/capi";
+import { sendPurchaseEvent, sendCheckoutEvents } from "@/lib/meta/capi";
 
 const MAX_ATTEMPTS = 5;
 // The webhook handler fires sendPurchaseEvent inline (fire-and-forget, not awaited) right
@@ -26,10 +26,24 @@ export async function retryCapi() {
     ),
   );
 
-  if (!pending.length) return { retried: 0 };
-
   for (const sale of pending) {
     await sendPurchaseEvent(sale);
   }
-  return { retried: pending.length };
+
+  // Checkout stage (InitiateCheckout+AddPaymentInfo) never has a "pending" interim state —
+  // sendCheckoutEvents runs synchronously start-to-finish in the webhook handler, unlike
+  // Purchase which is inserted as "pending" up front — so no grace window needed here,
+  // just sweep whatever's still "failed".
+  const failedCheckout = await db.select().from(sales).where(
+    and(
+      inArray(sales.capiCheckoutStatus, ["failed"]),
+      lt(sales.capiCheckoutAttempts, MAX_ATTEMPTS),
+    ),
+  );
+
+  for (const sale of failedCheckout) {
+    await sendCheckoutEvents(sale);
+  }
+
+  return { retried: pending.length + failedCheckout.length };
 }
