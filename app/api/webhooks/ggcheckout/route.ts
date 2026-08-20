@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { clicks, products, sales, webhookLogs } from "@/lib/db/schema";
 import { verifyWebhookSecret } from "@/lib/ggcheckout/webhook-verify";
 import type { GgCheckoutWebhookPayload } from "@/lib/ggcheckout/payload-types";
-import { sendPurchaseEvent } from "@/lib/meta/capi";
+import { sendPurchaseEvent, sendCheckoutEvents } from "@/lib/meta/capi";
 import { notifySale } from "@/lib/push/send";
 
 const PAID_EVENTS = new Set(["pix.paid", "card.paid"]);
@@ -102,6 +102,12 @@ export async function POST(req: NextRequest) {
 
     // clickid recovery: utm_content carries the bare clickid if the LP round-trip worked.
     // Present but no matching click row, or absent entirely -> clickid stays NULL, sale still saved.
+    // fbp (cookie do Meta Pixel) chega de carona no utm_term — ver track.js. GGCheckout só
+    // ecoa campos utm_* já mapeados, não param solto; formato "fb.1.<ts>.<id>" o distingue
+    // de um utm_term legítimo (sempre vazio hoje, ver app/r/route.ts).
+    const utmTermRaw = utm("utm_term");
+    const fbp = utmTermRaw && utmTermRaw.startsWith("fb.") ? utmTermRaw : null;
+
     let matchedClickId: string | null = null;
     const utmContent = utm("utm_content");
     if (utmContent) {
@@ -125,7 +131,8 @@ export async function POST(req: NextRequest) {
       utmMedium: utm("utm_medium"),
       utmCampaign: utm("utm_campaign"),
       utmContent,
-      utmTerm: utm("utm_term"),
+      utmTerm: fbp ? null : utmTermRaw,
+      fbp,
       clickid: matchedClickId,
       matched: matchedClickId !== null,
       capiStatus: PAID_EVENTS.has(payload.event) ? "pending" : "not_applicable",
@@ -171,6 +178,10 @@ export async function POST(req: NextRequest) {
         body: formatarValor(payload.payment?.amount),
         tag: `${paymentId}-${payload.event}`,
       });
+      // InitiateCheckout + AddPaymentInfo pro Meta nesse estágio — mesma guarda de
+      // "primeira vez" (redelivery do próprio .generated não deve reenviar). Independente
+      // do funil de Purchase, que roda no branch acima quando .paid chegar depois.
+      if (saved) void sendCheckoutEvents(saved);
     }
 
     return NextResponse.json({ ok: true });

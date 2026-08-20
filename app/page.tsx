@@ -321,11 +321,6 @@ export default async function PainelPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const filtros: DashboardFilters = {
-    from: sp.from, to: sp.to,
-    campaign: sp.campaign, platform: sp.platform, productId: sp.productId,
-  };
-  const d = await getDashboard(filtros);
 
   const hoje = new Date();
   const periodos = [
@@ -339,7 +334,19 @@ export default async function PainelPage({
     return { ...p, de, ate, ativo: sp.from === de && sp.to === ate };
   });
 
-  const semFiltroData = !sp.from && !sp.to;
+  const tudo = sp.periodo === "tudo";
+  // Sem from/to na URL e sem pedir "tudo" explicitamente -> abre já filtrado em Hoje,
+  // mesmo range da pill periodos[0]. "Tudo" continua acessível via ?periodo=tudo.
+  const from = tudo ? undefined : (sp.from ?? periodos[0].de);
+  const to = tudo ? undefined : (sp.to ?? periodos[0].ate);
+  const semFiltroData = tudo;
+  const filtroHojeImplicito = !tudo && !sp.from && !sp.to;
+
+  const filtros: DashboardFilters = {
+    from, to,
+    campaign: sp.campaign, platform: sp.platform, productId: sp.productId,
+  };
+  const d = await getDashboard(filtros);
 
   return (
     <>
@@ -352,29 +359,31 @@ export default async function PainelPage({
             <p className="subtitulo">
               {semFiltroData
                 ? "Todo o período registrado"
-                : `De ${dataBr(sp.from, "o início")} até ${dataBr(sp.to, "hoje")}`}
+                : filtroHojeImplicito
+                ? "Hoje"
+                : `De ${dataBr(from, "o início")} até ${dataBr(to, "hoje")}`}
             </p>
           </div>
 
           <div className="filtros filtros-periodo">
-            {periodos.map((p) => (
+            {periodos.map((p, i) => (
               <Link
                 key={p.rotulo}
-                href={comFiltros(sp, { from: p.de, to: p.ate })}
+                href={comFiltros(sp, { from: p.de, to: p.ate, periodo: undefined })}
                 className="pill"
-                aria-current={p.ativo ? "true" : undefined}
+                aria-current={p.ativo || (i === 0 && filtroHojeImplicito) ? "true" : undefined}
               >
                 {p.rotulo}
               </Link>
             ))}
-            <Link href={comFiltros(sp, { from: undefined, to: undefined })} className="pill" aria-current={semFiltroData ? "true" : undefined}>
+            <Link href={comFiltros(sp, { from: undefined, to: undefined, periodo: "tudo" })} className="pill" aria-current={semFiltroData ? "true" : undefined}>
               Tudo
             </Link>
           </div>
 
           <form method="get" className="filtros filtros-form" style={{ marginBottom: "var(--e5)" }}>
-            <input type="date" name="from" defaultValue={sp.from} className="campo" aria-label="Data inicial" />
-            <input type="date" name="to" defaultValue={sp.to} className="campo" aria-label="Data final" />
+            <input type="date" name="from" defaultValue={tudo ? undefined : from} className="campo" aria-label="Data inicial" />
+            <input type="date" name="to" defaultValue={tudo ? undefined : to} className="campo" aria-label="Data final" />
             <select name="campaign" defaultValue={sp.campaign ?? ""} className="campo" aria-label="Campanha">
               <option value="">Toda campanha</option>
               {d.filterOptions.campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
